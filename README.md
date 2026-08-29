@@ -67,6 +67,8 @@ Render / Railway / VPS など、Node.jsプロセスを常駐できる環境に�
 3. デプロイ完了後、Renderの **Environment** タブで以下を設定し、再デプロイ
    - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_CONTACT_EMAIL`（ローカルで `npm run generate-vapid-keys` を実行して生成した値）
    - `CRON_SECRET`（任意の文字列。外部スケジューラ利用時のみ必要）
+
+> **Note**: `render.yaml` の `buildCommand` は `npm install --include=dev` としています。Renderのようなホスティング環境では `NODE_ENV=production` の状態で `npm install` が走ると、npmの仕様で `devDependencies`（`typescript` など）が自動的にスキップされ、TypeScriptのビルドが失敗します。`--include=dev` で明示的にインストールすることでこれを回避しています。
 4. 発行されたURL（例: `https://train-watch-xxxx.onrender.com`）にスマホのブラウザでアクセスすれば利用開始できます
 
 **無料プランを使う場合の補完設定（任意）**: `.github/workflows/ping-cron.yml` はGitHub Actionsから5分おきに `/api/cron/check` を呼ぶワークフローです（既定では無効化されています）。有効化するには、このリポジトリの **Settings → Secrets and variables → Actions** で `APP_URL`（RenderのURL）と `CRON_SECRET` を登録し、ワークフローファイル内の `if: false` の行を削除してください。外部からのアクセスがスリープ中のインスタンスを起こす副次効果もあります。

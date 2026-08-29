@@ -58,6 +58,19 @@ Render / Railway / VPS など、Node.jsプロセスを常駐できる環境に�
 ### B. サーバーレス環境（Vercelなど）
 サーバーレスでは常駐プロセスを持てないため、`node-cron` は動作しません。代わりに `POST /api/cron/check` を外部スケジューラ（Vercel Cron / GitHub Actions の `schedule` / cron-job.org など）から5分おきに呼び出してください。`CRON_SECRET` を設定した場合は `Authorization: Bearer <CRON_SECRET>` ヘッダーが必要です。営業時間外の呼び出しは内部で自動的にスキップされます。
 
+### Renderへのデプロイ手順（このリポジトリに`render.yaml`同梱済み）
+
+1. [Render](https://render.com) にサインアップし、GitHubアカウントを連携
+2. Renderダッシュボードで **New +** → **Blueprint** を選択し、このリポジトリ（`Paji94/carassignment`）を選択
+   - `render.yaml` を自動検出し、`train-watch` という Web Service が作成されます（プランは `starter`＝有料の常時起動プラン、永続ディスク付き）
+   - 無料プランで試したい場合はRenderダッシュボードでプランを `free` に変更してください。ただし**無料プランは一定時間アクセスがないとスリープし、その間は5分おきの監視が止まります**（後述のGitHub Actionsで補完可能）。また無料プランには永続ディスクを付けられないため、再デプロイのたびに購読情報がリセットされます
+3. デプロイ完了後、Renderの **Environment** タブで以下を設定し、再デプロイ
+   - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_CONTACT_EMAIL`（ローカルで `npm run generate-vapid-keys` を実行して生成した値）
+   - `CRON_SECRET`（任意の文字列。外部スケジューラ利用時のみ必要）
+4. 発行されたURL（例: `https://train-watch-xxxx.onrender.com`）にスマホのブラウザでアクセスすれば利用開始できます
+
+**無料プランを使う場合の補完設定（任意）**: `.github/workflows/ping-cron.yml` はGitHub Actionsから5分おきに `/api/cron/check` を呼ぶワークフローです（既定では無効化されています）。有効化するには、このリポジトリの **Settings → Secrets and variables → Actions** で `APP_URL`（RenderのURL）と `CRON_SECRET` を登録し、ワークフローファイル内の `if: false` の行を削除してください。外部からのアクセスがスリープ中のインスタンスを起こす副次効果もあります。
+
 ## 既知の制約（正直に書きます）
 
 - **通知音を「3秒で止まるチャイム」に完全固定することはできません。** Web Push通知の音はOS/ブラウザの既定通知音に依存し、Webアプリ側から音源や再生時間を指定することはブラウザの仕様上できません。本アプリでは、通知タップでアプリを開いた瞬間に、アプリ内でWeb Audio APIを使って合成した3秒のチャイムを再生することでこれに近い体験を実現しています。通知そのものの音を完全にカスタマイズしたい場合は、Androidアプリとして独自の通知チャンネル（カスタムサウンド指定可能）を持つネイティブアプリ化が必要です。

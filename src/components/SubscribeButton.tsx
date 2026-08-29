@@ -6,7 +6,7 @@ import {
   isPushSupported,
   subscribeToPush,
   unsubscribeFromPush,
-} from "@/lib/pushClient";
+} from "../lib/pushClient";
 
 export function SubscribeButton() {
   const [supported, setSupported] = useState(true);

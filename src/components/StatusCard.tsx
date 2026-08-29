@@ -1,4 +1,4 @@
-import type { OdakyuStatus } from "@/lib/odakyuStatus";
+import type { OdakyuStatus } from "../lib/odakyuStatus";
 
 const LEVEL_META: Record<OdakyuStatus["level"], { label: string; color: string; icon: string }> = {
   normal: { label: "平常運転", color: "var(--status-normal)", icon: "✓" },

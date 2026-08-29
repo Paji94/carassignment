@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addSubscription, removeSubscription } from "@/lib/store";
+import { addSubscription, removeSubscription } from "../../../lib/store";
 
 interface SubscribeBody {
   endpoint?: string;

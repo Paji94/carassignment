@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LineHeader } from "@/components/LineHeader";
-import { StatusCard } from "@/components/StatusCard";
-import { SubscribeButton } from "@/components/SubscribeButton";
-import { playThreeSecondChime } from "@/lib/chime";
-import type { OdakyuStatus } from "@/lib/odakyuStatus";
+import { LineHeader } from "../components/LineHeader";
+import { StatusCard } from "../components/StatusCard";
+import { SubscribeButton } from "../components/SubscribeButton";
+import { playThreeSecondChime } from "../lib/chime";
+import type { OdakyuStatus } from "../lib/odakyuStatus";
 
 interface StatusResponse {
   currentStatus: OdakyuStatus | null;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runCheckCycle } from "@/lib/checkCycle";
+import { runCheckCycle } from "../../../../lib/checkCycle";
 
 export const dynamic = "force-dynamic";
 

@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: train-watch
+    runtime: node
+    plan: starter
+    region: singapore
+    branch: claude/train-watch-app-vwq017
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/status
+    autoDeploy: true
+    envVars:
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_CONTACT_EMAIL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: train-watch-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <title>関東河川ライブカメラ - 田園調布観測所</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+          "Yu Gothic", sans-serif;
+        background: #f4f6f8;
+        color: #1a1a1a;
+      }
+      header {
+        background: #0b5ed7;
+        color: #fff;
+        padding: 16px 20px;
+      }
+      header h1 {
+        margin: 0 0 4px;
+        font-size: 20px;
+      }
+      header p {
+        margin: 0;
+        font-size: 13px;
+        opacity: 0.9;
+      }
+      main {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 16px;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .panel {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .panel-camera {
+        flex: 3 1 640px;
+        min-width: 320px;
+      }
+      .panel-info {
+        flex: 2 1 320px;
+        min-width: 280px;
+      }
+      .panel-header {
+        padding: 10px 14px;
+        font-weight: bold;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fafafa;
+      }
+      .panel-body {
+        padding: 14px;
+        flex: 1;
+      }
+      .iframe-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        background: #e5e7eb;
+      }
+      .iframe-wrap iframe {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+      dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        row-gap: 10px;
+        column-gap: 12px;
+        font-size: 14px;
+      }
+      dt {
+        color: #555;
+        white-space: nowrap;
+      }
+      dd {
+        margin: 0;
+        font-weight: 600;
+      }
+      .notice {
+        margin: 14px 0 0;
+        padding: 10px 12px;
+        background: #fff7e6;
+        border: 1px solid #ffe0a3;
+        border-radius: 6px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .external-link {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 10px 16px;
+        background: #0b5ed7;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      .external-link:hover {
+        background: #094bb0;
+      }
+      .fallback-note {
+        padding: 8px 14px;
+        font-size: 12px;
+        color: #666;
+        background: #fafafa;
+        border-top: 1px solid #e5e7eb;
+      }
+      .fallback-note a {
+        color: #0b5ed7;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>関東河川ライブカメラ</h1>
+      <p>国土交通省「川の防災情報」(river.go.jp) のデータを表示しています</p>
+    </header>
+    <main>
+      <section class="panel panel-camera">
+        <div class="panel-header">ライブカメラ映像</div>
+        <div class="panel-body">
+          <div class="iframe-wrap">
+            <iframe
+              id="riverMapFrame"
+              title="田園調布観測所 ライブカメラ・水位マップ"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+              allow="fullscreen"
+            ></iframe>
+          </div>
+        </div>
+        <div class="fallback-note">
+          映像が表示されない場合、提供元サイトが埋め込み表示を許可していない可能性があります。
+          <a id="openInNewTab" href="#" target="_blank" rel="noopener noreferrer">公式サイトで直接開く</a>
+        </div>
+      </section>
+      <section class="panel panel-info">
+        <div class="panel-header">水位・観測所情報</div>
+        <div class="panel-body">
+          <dl>
+            <dt>観測所</dt>
+            <dd>田園調布観測所</dd>
+            <dt>河川</dt>
+            <dd>多摩川</dd>
+            <dt>提供元</dt>
+            <dd>国土交通省 川の防災情報</dd>
+          </dl>
+          <p class="notice">
+            現在の水位は左のマップ内の観測所アイコンをクリックすると表示されます。
+            水位は防災に関わる情報のため、必ず
+            <a id="openInNewTabInfo" href="#" target="_blank" rel="noopener noreferrer">公式サイト</a>
+            の最新情報をご確認ください。
+          </p>
+          <a id="externalLink" class="external-link" href="#" target="_blank" rel="noopener noreferrer">
+            公式サイトで水位・カメラを確認する
+          </a>
+        </div>
+      </section>
+    </main>
+    <script>
+      // Build the source URL with the current timestamp so the embedded
+      // map always requests "now" instead of a stale build-time value.
+      function buildRiverMapUrl() {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const tmtime = `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(
+          now.getDate()
+        )} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        const params = new URLSearchParams({
+          zm: "15",
+          clat: "35.58925433595515",
+          clon: "139.66575622558597",
+          fld: "0",
+          mapType: "0",
+          viewGrpStg: "0",
+          viewRd: "1",
+          viewRW: "1",
+          viewRiver: "1",
+          viewPoint: "1",
+          ext: "0",
+          itmkndCd: "100",
+          scamId: "221320032",
+          ownCd: "21320",
+          sysCamId: "21320007",
+          viewRl: "1",
+          viewRn: "1",
+          tmtime,
+        });
+
+        return `https://www.river.go.jp/kawabou/pc/tm?${params.toString()}`;
+      }
+
+      const url = buildRiverMapUrl();
+      document.getElementById("riverMapFrame").src = url;
+      document.getElementById("openInNewTab").href = url;
+      document.getElementById("openInNewTabInfo").href = url;
+      document.getElementById("externalLink").href = url;
+    </script>
+  </body>
+</html>

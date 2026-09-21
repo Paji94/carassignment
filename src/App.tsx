@@ -1,6 +1,36 @@
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 
-const initialMembers = [
+type Role = "coach" | "parent" | "player";
+type DriverRole = "coach" | "parent";
+type Tab = "setup" | "drive" | "result";
+
+interface Member {
+  id: number;
+  name: string;
+  role: Role;
+}
+
+interface CarDefinition {
+  carName: string;
+  driverName: string;
+  driverRole: DriverRole;
+  capacity: number;
+  isBaggageCar: boolean;
+}
+
+interface AssignedCar extends CarDefinition {
+  driver: Member;
+  passengers: Member[];
+  hasParent: boolean;
+}
+
+interface CarCandidate extends CarDefinition {
+  driver: Member | undefined;
+  passengers: Member[];
+  hasParent: boolean;
+}
+
+const initialMembers: Member[] = [
   { id: 1, name: "北島監督", role: "coach" },
   { id: 2, name: "太田", role: "coach" },
   { id: 3, name: "菅原", role: "coach" },
@@ -33,36 +63,36 @@ const initialMembers = [
   { id: 30, name: "森", role: "player" },
 ];
 
-const CAR_DEFINITIONS = [
+const CAR_DEFINITIONS: CarDefinition[] = [
   { carName: "北島号", driverName: "北島監督", driverRole: "coach", capacity: 3, isBaggageCar: false },
   { carName: "太田号", driverName: "太田", driverRole: "coach", capacity: 3, isBaggageCar: false },
   { carName: "菅原号", driverName: "菅原", driverRole: "coach", capacity: 5, isBaggageCar: true },
   { carName: "田中号", driverName: "田中", driverRole: "coach", capacity: 3, isBaggageCar: true },
 ];
 
-const roleLabel = { coach: "コーチ", parent: "ママーズ", player: "選手" };
-const roleColor = {
+const roleLabel: Record<Role, string> = { coach: "コーチ", parent: "ママーズ", player: "選手" };
+const roleColor: Record<Role, { bg: string; text: string }> = {
   coach: { bg: "#1a3a5c", text: "#7ec8e3" },
   parent: { bg: "#2d4a1e", text: "#a8d85c" },
   player: { bg: "#4a1a1a", text: "#e38a7e" },
 };
 
-function assignCars(activeCars, attendees) {
+function assignCars(activeCars: CarDefinition[], attendees: Member[]): AssignedCar[] {
   if (activeCars.length === 0) return [];
 
-  const cars = activeCars.map((carDef) => {
+  const cars: AssignedCar[] = activeCars.map((carDef): CarCandidate => {
     const driver = attendees.find(
       (a) => a.name === carDef.driverName && a.role === carDef.driverRole
     );
     return { ...carDef, driver, passengers: [], hasParent: false };
-  }).filter((c) => c.driver);
+  }).filter((c): c is AssignedCar => !!c.driver);
 
   const driverIds = new Set(cars.map((c) => c.driver.id));
   const nonDrivers = attendees.filter((a) => !driverIds.has(a.id));
-  const assigned = new Set();
+  const assigned = new Set<number>();
 
   // 同姓グループを作成
-  const nameGroups = {};
+  const nameGroups: Record<string, Member[]> = {};
   for (const person of nonDrivers) {
     if (!nameGroups[person.name]) nameGroups[person.name] = [];
     nameGroups[person.name].push(person);
@@ -103,6 +133,7 @@ function assignCars(activeCars, attendees) {
   for (const car of cars) {
     if (!car.hasParent && remainingParents.length > 0 && car.passengers.length < car.capacity - 1) {
       const p = remainingParents.shift();
+      if (!p) continue;
       car.passengers.push(p);
       car.hasParent = true;
       assigned.add(p.id);
@@ -121,7 +152,8 @@ function assignCars(activeCars, attendees) {
   while (remainingPlayers.length > 0) {
     const car = cars[idx % cars.length];
     if (car.passengers.length < car.capacity - 1) {
-      car.passengers.push(remainingPlayers.shift());
+      const nextPlayer = remainingPlayers.shift();
+      if (nextPlayer) car.passengers.push(nextPlayer);
     }
     idx++;
     if (idx > cars.length * 100) break;
@@ -131,36 +163,36 @@ function assignCars(activeCars, attendees) {
 }
 
 export default function App() {
-  const [members, setMembers] = useState(initialMembers);
-  const [attending, setAttending] = useState({});
-  const [carDefs, setCarDefs] = useState(CAR_DEFINITIONS);
-  const [activeCars, setActiveCars] = useState(
-    CAR_DEFINITIONS.reduce((acc, c) => ({ ...acc, [c.carName]: true }), {})
+  const [members, setMembers] = useState<Member[]>(initialMembers);
+  const [attending, setAttending] = useState<Record<number, boolean>>({});
+  const [carDefs, setCarDefs] = useState<CarDefinition[]>(CAR_DEFINITIONS);
+  const [activeCars, setActiveCars] = useState<Record<string, boolean>>(
+    CAR_DEFINITIONS.reduce((acc, c) => ({ ...acc, [c.carName]: true }), {} as Record<string, boolean>)
   );
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<AssignedCar[] | null>(null);
   const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState("player");
-  const [tab, setTab] = useState("setup");
+  const [newRole, setNewRole] = useState<Role>("player");
+  const [tab, setTab] = useState<Tab>("setup");
   const [newCarName, setNewCarName] = useState("");
   const [newCarDriver, setNewCarDriver] = useState("");
-  const [newCarDriverRole, setNewCarDriverRole] = useState("coach");
+  const [newCarDriverRole, setNewCarDriverRole] = useState<DriverRole>("coach");
   const [newCarCapacity, setNewCarCapacity] = useState(4);
   const [newCarIsBaggage, setNewCarIsBaggage] = useState(false);
 
-  const toggleAttend = (id) => setAttending((prev) => ({ ...prev, [id]: !prev[id] }));
-  const toggleCar = (carName) => setActiveCars((prev) => ({ ...prev, [carName]: !prev[carName] }));
+  const toggleAttend = (id: number) => setAttending((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleCar = (carName: string) => setActiveCars((prev) => ({ ...prev, [carName]: !prev[carName] }));
 
   const addCar = () => {
     if (!newCarName.trim() || !newCarDriver.trim()) return;
-    const newCar = { carName: newCarName.trim(), driverName: newCarDriver.trim(), driverRole: newCarDriverRole, capacity: newCarCapacity, isBaggageCar: newCarIsBaggage };
+    const newCar: CarDefinition = { carName: newCarName.trim(), driverName: newCarDriver.trim(), driverRole: newCarDriverRole, capacity: newCarCapacity, isBaggageCar: newCarIsBaggage };
     setCarDefs((prev) => [...prev, newCar]);
     setActiveCars((prev) => ({ ...prev, [newCar.carName]: true }));
     setNewCarName(""); setNewCarDriver(""); setNewCarCapacity(4); setNewCarIsBaggage(false);
   };
 
-  const removeCar = (carName) => {
+  const removeCar = (carName: string) => {
     setCarDefs((prev) => prev.filter((c) => c.carName !== carName));
-    setActiveCars((prev) => { const n = {...prev}; delete n[carName]; return n; });
+    setActiveCars((prev) => { const n = { ...prev }; delete n[carName]; return n; });
   };
 
   const attendees = members.filter((m) => attending[m.id]);
@@ -177,9 +209,9 @@ export default function App() {
     setNewName("");
   };
 
-  const removeMember = (id) => {
+  const removeMember = (id: number) => {
     setMembers((prev) => prev.filter((m) => m.id !== id));
-    setAttending((prev) => { const n = {...prev}; delete n[id]; return n; });
+    setAttending((prev) => { const n = { ...prev }; delete n[id]; return n; });
   };
 
   const totalSeats = availableCars.reduce((s, c) => s + (c.capacity - 1), 0);
@@ -231,8 +263,8 @@ export default function App() {
           <div style={{ fontSize: 15, fontWeight: "bold", color: "#c8a84b", letterSpacing: 1 }}>船橋フェニックスホワイトチーム　配車アプリ</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {["setup", "drive", "result"].map((t) => {
-            const labels = { setup: "① 参加選択", drive: "② 車・ドライバー", result: "③ 配車結果" };
+          {(["setup", "drive", "result"] as const).map((t) => {
+            const labels: Record<Tab, string> = { setup: "① 参加選択", drive: "② 車・ドライバー", result: "③ 配車結果" };
             return (
               <button key={t} onClick={() => setTab(t)} style={{ padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: "bold", background: tab === t ? "#c8a84b" : "rgba(255,255,255,0.1)", color: tab === t ? "#0d1b2a" : "#e8dcc8", transition: "all 0.2s" }}>
                 {labels[t]}
@@ -250,7 +282,7 @@ export default function App() {
             <div style={{ marginBottom: 16, padding: "12px 16px", background: "rgba(200,168,75,0.1)", borderRadius: 10, border: "1px solid rgba(200,168,75,0.3)", fontSize: 13, color: "#c8a84b" }}>
               選手車で移動するメンバーにチェックを入れてください
             </div>
-            {["coach", "parent", "player"].map((role) => {
+            {(["coach", "parent", "player"] as const).map((role) => {
               const group = members.filter((m) => m.role === role);
               return (
                 <div key={role} style={{ marginBottom: 16 }}>
@@ -280,7 +312,7 @@ export default function App() {
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="名前を入力"
                   style={{ flex: 1, minWidth: 120, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#e8dcc8", fontSize: 13 }} />
-                <select value={newRole} onChange={(e) => setNewRole(e.target.value)}
+                <select value={newRole} onChange={(e: ChangeEvent<HTMLSelectElement>) => setNewRole(e.target.value as Role)}
                   style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "#1a3a5c", color: "#e8dcc8", fontSize: 13 }}>
                   <option value="coach">コーチ</option>
                   <option value="parent">ママーズ</option>
@@ -340,7 +372,7 @@ export default function App() {
                 <div style={{ display: "flex", gap: 8 }}>
                   <input value={newCarDriver} onChange={(e) => setNewCarDriver(e.target.value)} placeholder="運転手の名前"
                     style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#e8dcc8", fontSize: 13 }} />
-                  <select value={newCarDriverRole} onChange={(e) => setNewCarDriverRole(e.target.value)}
+                  <select value={newCarDriverRole} onChange={(e: ChangeEvent<HTMLSelectElement>) => setNewCarDriverRole(e.target.value as DriverRole)}
                     style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "#1a3a5c", color: "#e8dcc8", fontSize: 13 }}>
                     <option value="coach">コーチ</option>
                     <option value="parent">ママーズ</option>

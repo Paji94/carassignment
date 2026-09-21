@@ -71,10 +71,37 @@ const CAR_DEFINITIONS: CarDefinition[] = [
 ];
 
 const roleLabel: Record<Role, string> = { coach: "コーチ", parent: "ママーズ", player: "選手" };
-const roleColor: Record<Role, { bg: string; text: string }> = {
-  coach: { bg: "#1a3a5c", text: "#7ec8e3" },
-  parent: { bg: "#2d4a1e", text: "#a8d85c" },
-  player: { bg: "#4a1a1a", text: "#e38a7e" },
+
+// ロールごとの配色はTailwindのJITスキャナがビルド時にクラス名を検出できるよう、
+// 動的なテンプレート文字列ではなく静的なクラス名の一覧として定義する。
+const ROLE_CLASSES: Record<Role, {
+  sectionText: string;
+  rowActiveBg: string;
+  rowActiveBorder: string;
+  checkboxBorderActive: string;
+  checkboxBgActive: string;
+}> = {
+  coach: {
+    sectionText: "text-[#7ec8e3]",
+    rowActiveBg: "bg-[#1a3a5ccc]",
+    rowActiveBorder: "border-[#7ec8e366]",
+    checkboxBorderActive: "border-[#7ec8e3]",
+    checkboxBgActive: "bg-[#7ec8e3]",
+  },
+  parent: {
+    sectionText: "text-[#a8d85c]",
+    rowActiveBg: "bg-[#2d4a1ecc]",
+    rowActiveBorder: "border-[#a8d85c66]",
+    checkboxBorderActive: "border-[#a8d85c]",
+    checkboxBgActive: "bg-[#a8d85c]",
+  },
+  player: {
+    sectionText: "text-[#e38a7e]",
+    rowActiveBg: "bg-[#4a1a1acc]",
+    rowActiveBorder: "border-[#e38a7e66]",
+    checkboxBorderActive: "border-[#e38a7e]",
+    checkboxBgActive: "bg-[#e38a7e]",
+  },
 };
 
 function assignCars(activeCars: CarDefinition[], attendees: Member[]): AssignedCar[] {
@@ -221,13 +248,17 @@ export default function App() {
   const baggageCarOk = availableCars.some((c) => c.isBaggageCar);
   const canGenerate = availableCars.length > 0 && seatOk && baggageCarOk;
 
+  const removeButtonClass = "cursor-pointer border-none bg-transparent px-1 text-[16px] text-[#556677]";
+  const textFieldClass = "rounded-lg border border-white/20 bg-white/[0.08] py-2 px-3 text-[13px] text-[#e8dcc8]";
+  const selectFieldClass = "rounded-lg border border-white/20 bg-[#1a3a5c] py-2 px-2.5 text-[13px] text-[#e8dcc8]";
+
   return (
-    <div style={{ minHeight: "100vh", background: "#0d1b2a", fontFamily: "'Georgia', serif", color: "#e8dcc8", padding: "0" }}>
+    <div className="min-h-screen bg-[#0d1b2a] font-serif text-[#e8dcc8]">
 
       {/* ロゴバナー */}
-      <div style={{ background: "linear-gradient(180deg, #0a0f1a 0%, #0d1f35 60%, #0d2a4a 100%)", padding: "12px 16px 10px", textAlign: "center", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, opacity: 0.07, background: "radial-gradient(ellipse at 50% 120%, #ff6b00 0%, #c8a84b 40%, transparent 70%)", pointerEvents: "none" }} />
-        <svg viewBox="0 0 210 55" width="100%" style={{ maxWidth: 210, display: "block", margin: "0 auto" }} xmlns="http://www.w3.org/2000/svg">
+      <div className="relative overflow-hidden bg-[linear-gradient(180deg,#0a0f1a_0%,#0d1f35_60%,#0d2a4a_100%)] px-4 pt-3 pb-2.5 text-center">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_120%,#ff6b00_0%,#c8a84b_40%,transparent_70%)] opacity-[0.07]" />
+        <svg viewBox="0 0 210 55" className="mx-auto block w-full max-w-[210px]" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stopColor="#ffe680" />
@@ -257,16 +288,22 @@ export default function App() {
       </div>
 
       {/* ヘッダー */}
-      <div style={{ background: "linear-gradient(135deg, #1a3a5c 0%, #0d2137 100%)", borderBottom: "3px solid #c8a84b", padding: "14px 24px 16px", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-          <span style={{ fontSize: 22 }}>⚾</span>
-          <div style={{ fontSize: 15, fontWeight: "bold", color: "#c8a84b", letterSpacing: 1 }}>船橋フェニックスホワイトチーム　配車アプリ</div>
+      <div className="sticky top-0 z-[100] border-b-[3px] border-[#c8a84b] bg-gradient-to-br from-[#1a3a5c] to-[#0d2137] pt-3.5 px-6 pb-4">
+        <div className="mb-3.5 flex items-center gap-3">
+          <span className="text-[22px]">⚾</span>
+          <div className="text-[15px] font-bold tracking-[1px] text-[#c8a84b]">船橋フェニックスホワイトチーム　配車アプリ</div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="flex gap-2">
           {(["setup", "drive", "result"] as const).map((t) => {
             const labels: Record<Tab, string> = { setup: "① 参加選択", drive: "② 車・ドライバー", result: "③ 配車結果" };
             return (
-              <button key={t} onClick={() => setTab(t)} style={{ padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: "bold", background: tab === t ? "#c8a84b" : "rgba(255,255,255,0.1)", color: tab === t ? "#0d1b2a" : "#e8dcc8", transition: "all 0.2s" }}>
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`cursor-pointer rounded-[20px] border-none py-1.5 px-3.5 text-[12px] font-bold transition-all duration-200 ${
+                  tab === t ? "bg-[#c8a84b] text-[#0d1b2a]" : "bg-white/10 text-[#e8dcc8]"
+                }`}
+              >
                 {labels[t]}
               </button>
             );
@@ -274,31 +311,45 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ padding: "16px", maxWidth: 600, margin: "0 auto" }}>
+      <div className="mx-auto max-w-[600px] p-4">
 
         {/* ① 参加選択タブ */}
         {tab === "setup" && (
           <div>
-            <div style={{ marginBottom: 16, padding: "12px 16px", background: "rgba(200,168,75,0.1)", borderRadius: 10, border: "1px solid rgba(200,168,75,0.3)", fontSize: 13, color: "#c8a84b" }}>
+            <div className="mb-4 rounded-[10px] border border-[#c8a84b]/30 bg-[#c8a84b]/10 py-3 px-4 text-[13px] text-[#c8a84b]">
               選手車で移動するメンバーにチェックを入れてください
             </div>
             {(["coach", "parent", "player"] as const).map((role) => {
               const group = members.filter((m) => m.role === role);
               return (
-                <div key={role} style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: "bold", color: roleColor[role].text, marginBottom: 8, letterSpacing: 2, textTransform: "uppercase" }}>
+                <div key={role} className="mb-4">
+                  <div className={`mb-2 text-[12px] font-bold uppercase tracking-[2px] ${ROLE_CLASSES[role].sectionText}`}>
                     {roleLabel[role]} ({group.filter(m => attending[m.id]).length}/{group.length})
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className="flex flex-col gap-1.5">
                     {group.map((m) => (
-                      <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, background: attending[m.id] ? `${roleColor[role].bg}cc` : "rgba(255,255,255,0.04)", border: `1px solid ${attending[m.id] ? roleColor[role].text + "66" : "rgba(255,255,255,0.08)"}`, cursor: "pointer", transition: "all 0.2s" }} onClick={() => toggleAttend(m.id)}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${attending[m.id] ? roleColor[role].text : "rgba(255,255,255,0.3)"}`, background: attending[m.id] ? roleColor[role].text : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#0d1b2a", flexShrink: 0 }}>
+                      <div
+                        key={m.id}
+                        className={`flex cursor-pointer items-center justify-between rounded-[10px] border py-2.5 px-3.5 transition-all duration-200 ${
+                          attending[m.id]
+                            ? `${ROLE_CLASSES[role].rowActiveBg} ${ROLE_CLASSES[role].rowActiveBorder}`
+                            : "border-white/[0.08] bg-white/[0.04]"
+                        }`}
+                        onClick={() => toggleAttend(m.id)}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border-2 text-[13px] text-[#0d1b2a] ${
+                              attending[m.id]
+                                ? `${ROLE_CLASSES[role].checkboxBorderActive} ${ROLE_CLASSES[role].checkboxBgActive}`
+                                : "border-white/30 bg-transparent"
+                            }`}
+                          >
                             {attending[m.id] ? "✓" : ""}
                           </div>
-                          <span style={{ fontSize: 14, color: attending[m.id] ? "#e8dcc8" : "#8899aa" }}>{m.name}</span>
+                          <span className={`text-[14px] ${attending[m.id] ? "text-[#e8dcc8]" : "text-[#8899aa]"}`}>{m.name}</span>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); removeMember(m.id); }} style={{ background: "none", border: "none", color: "#556677", cursor: "pointer", fontSize: 16, padding: "0 4px" }}>×</button>
+                        <button onClick={(e) => { e.stopPropagation(); removeMember(m.id); }} className={removeButtonClass}>×</button>
                       </div>
                     ))}
                   </div>
@@ -307,22 +358,30 @@ export default function App() {
             })}
 
             {/* メンバー追加 */}
-            <div style={{ marginTop: 20, padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.15)" }}>
-              <div style={{ fontSize: 12, color: "#7ec8e3", marginBottom: 10, fontWeight: "bold" }}>＋ メンバーを追加</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="mt-5 rounded-xl border border-dashed border-white/[0.15] bg-white/[0.04] p-4">
+              <div className="mb-2.5 text-[12px] font-bold text-[#7ec8e3]">＋ メンバーを追加</div>
+              <div className="flex flex-wrap gap-2">
                 <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="名前を入力"
-                  style={{ flex: 1, minWidth: 120, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#e8dcc8", fontSize: 13 }} />
+                  className={`min-w-[120px] flex-1 ${textFieldClass}`} />
                 <select value={newRole} onChange={(e: ChangeEvent<HTMLSelectElement>) => setNewRole(e.target.value as Role)}
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "#1a3a5c", color: "#e8dcc8", fontSize: 13 }}>
+                  className={selectFieldClass}>
                   <option value="coach">コーチ</option>
                   <option value="parent">ママーズ</option>
                   <option value="player">選手</option>
                 </select>
-                <button onClick={addMember} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#c8a84b", color: "#0d1b2a", fontSize: 13, fontWeight: "bold", cursor: "pointer" }}>追加</button>
+                <button onClick={addMember} className="cursor-pointer rounded-lg border-none bg-[#c8a84b] py-2 px-4 text-[13px] font-bold text-[#0d1b2a]">追加</button>
               </div>
             </div>
 
-            <button onClick={() => setTab("drive")} disabled={attendees.length === 0} style={{ width: "100%", marginTop: 20, padding: "14px", borderRadius: 12, border: "none", background: attendees.length > 0 ? "linear-gradient(135deg, #c8a84b, #e8c86b)" : "rgba(255,255,255,0.1)", color: attendees.length > 0 ? "#0d1b2a" : "#556677", fontSize: 15, fontWeight: "bold", cursor: attendees.length > 0 ? "pointer" : "not-allowed" }}>
+            <button
+              onClick={() => setTab("drive")}
+              disabled={attendees.length === 0}
+              className={`mt-5 w-full rounded-xl border-none p-3.5 text-[15px] font-bold ${
+                attendees.length > 0
+                  ? "cursor-pointer bg-gradient-to-br from-[#c8a84b] to-[#e8c86b] text-[#0d1b2a]"
+                  : "cursor-not-allowed bg-white/10 text-[#556677]"
+              }`}
+            >
               次へ：車・ドライバーを選択 →
             </button>
           </div>
@@ -331,31 +390,40 @@ export default function App() {
         {/* ② 車選択タブ */}
         {tab === "drive" && (
           <div>
-            <div style={{ marginBottom: 16, padding: "12px 16px", background: "rgba(126,200,227,0.1)", borderRadius: 10, border: "1px solid rgba(126,200,227,0.3)", fontSize: 13, color: "#7ec8e3" }}>
+            <div className="mb-4 rounded-[10px] border border-[#7ec8e3]/30 bg-[#7ec8e3]/10 py-3 px-4 text-[13px] text-[#7ec8e3]">
               今日使う車にチェックを入れてください。ドライバーが参加している場合のみ有効になります。
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+            <div className="mb-4 flex flex-col gap-2.5">
               {carDefs.map((carDef) => {
                 const isChecked = activeCars[carDef.carName];
                 const isAvailable = !!attendees.find((a) => a.name === carDef.driverName && a.role === carDef.driverRole);
                 return (
-                  <div key={carDef.carName} style={{ padding: "14px 16px", borderRadius: 12, background: isChecked && isAvailable ? "rgba(126,200,227,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${isChecked && isAvailable ? "#7ec8e366" : "rgba(255,255,255,0.08)"}`, opacity: isAvailable ? 1 : 0.45 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: "pointer" }} onClick={() => isAvailable && toggleCar(carDef.carName)}>
-                        <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isChecked && isAvailable ? "#7ec8e3" : "rgba(255,255,255,0.3)"}`, background: isChecked && isAvailable ? "#7ec8e3" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#0d1b2a", flexShrink: 0 }}>
+                  <div
+                    key={carDef.carName}
+                    className={`rounded-xl border py-3.5 px-4 ${
+                      isChecked && isAvailable ? "border-[#7ec8e366] bg-[#7ec8e3]/[0.12]" : "border-white/[0.08] bg-white/[0.04]"
+                    } ${isAvailable ? "opacity-100" : "opacity-[0.45]"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-1 cursor-pointer items-center gap-2.5" onClick={() => isAvailable && toggleCar(carDef.carName)}>
+                        <div
+                          className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border-2 text-[13px] text-[#0d1b2a] ${
+                            isChecked && isAvailable ? "border-[#7ec8e3] bg-[#7ec8e3]" : "border-white/30 bg-transparent"
+                          }`}
+                        >
                           {isChecked && isAvailable ? "✓" : ""}
                         </div>
                         <div>
-                          <div style={{ fontSize: 15, fontWeight: "bold", color: isChecked && isAvailable ? "#e8dcc8" : "#8899aa" }}>🚗 {carDef.carName}</div>
-                          <div style={{ fontSize: 11, color: "#7ec8e3", marginTop: 2 }}>
+                          <div className={`text-[15px] font-bold ${isChecked && isAvailable ? "text-[#e8dcc8]" : "text-[#8899aa]"}`}>🚗 {carDef.carName}</div>
+                          <div className="mt-0.5 text-[11px] text-[#7ec8e3]">
                             運転手：{carDef.driverName}（{carDef.driverRole === "coach" ? "コーチ" : "ママーズ"}）　定員：{carDef.capacity}人
-                            {carDef.isBaggageCar && <span style={{ marginLeft: 8, color: "#c8a84b" }}>🎒 荷物車</span>}
+                            {carDef.isBaggageCar && <span className="ml-2 text-[#c8a84b]">🎒 荷物車</span>}
                           </div>
                         </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {!isAvailable && <span style={{ fontSize: 11, color: "#e38a7e" }}>未参加</span>}
-                        <button onClick={(e) => { e.stopPropagation(); removeCar(carDef.carName); }} style={{ background: "none", border: "none", color: "#556677", cursor: "pointer", fontSize: 16, padding: "0 4px" }}>×</button>
+                      <div className="flex items-center gap-2">
+                        {!isAvailable && <span className="text-[11px] text-[#e38a7e]">未参加</span>}
+                        <button onClick={(e) => { e.stopPropagation(); removeCar(carDef.carName); }} className={removeButtonClass}>×</button>
                       </div>
                     </div>
                   </div>
@@ -364,55 +432,75 @@ export default function App() {
             </div>
 
             {/* 車追加フォーム */}
-            <div style={{ marginBottom: 20, padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.15)" }}>
-              <div style={{ fontSize: 12, color: "#7ec8e3", marginBottom: 12, fontWeight: "bold" }}>＋ 車・ドライバーを追加</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="mb-5 rounded-xl border border-dashed border-white/[0.15] bg-white/[0.04] p-4">
+              <div className="mb-3 text-[12px] font-bold text-[#7ec8e3]">＋ 車・ドライバーを追加</div>
+              <div className="flex flex-col gap-2.5">
                 <input value={newCarName} onChange={(e) => setNewCarName(e.target.value)} placeholder="車の名前（例：山田号）"
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#e8dcc8", fontSize: 13 }} />
-                <div style={{ display: "flex", gap: 8 }}>
+                  className={textFieldClass} />
+                <div className="flex gap-2">
                   <input value={newCarDriver} onChange={(e) => setNewCarDriver(e.target.value)} placeholder="運転手の名前"
-                    style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#e8dcc8", fontSize: 13 }} />
+                    className={`flex-1 ${textFieldClass}`} />
                   <select value={newCarDriverRole} onChange={(e: ChangeEvent<HTMLSelectElement>) => setNewCarDriverRole(e.target.value as DriverRole)}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "#1a3a5c", color: "#e8dcc8", fontSize: 13 }}>
+                    className={selectFieldClass}>
                     <option value="coach">コーチ</option>
                     <option value="parent">ママーズ</option>
                   </select>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: "#c8a84b", whiteSpace: "nowrap" }}>🚗 乗車人数（運転手含む）</span>
+                <div className="flex items-center gap-2">
+                  <span className="whitespace-nowrap text-[13px] text-[#c8a84b]">🚗 乗車人数（運転手含む）</span>
                   <select value={newCarCapacity} onChange={(e) => setNewCarCapacity(parseInt(e.target.value))}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "#1a3a5c", color: "#e8dcc8", fontSize: 13 }}>
+                    className={selectFieldClass}>
                     {[2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}人</option>)}
                   </select>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setNewCarIsBaggage(!newCarIsBaggage)}>
-                  <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${newCarIsBaggage ? "#c8a84b" : "rgba(255,255,255,0.3)"}`, background: newCarIsBaggage ? "#c8a84b" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#0d1b2a" }}>
+                <div className="flex cursor-pointer items-center gap-2.5" onClick={() => setNewCarIsBaggage(!newCarIsBaggage)}>
+                  <div
+                    className={`flex h-5 w-5 items-center justify-center rounded-[5px] border-2 text-[12px] text-[#0d1b2a] ${
+                      newCarIsBaggage ? "border-[#c8a84b] bg-[#c8a84b]" : "border-white/30 bg-transparent"
+                    }`}
+                  >
                     {newCarIsBaggage ? "✓" : ""}
                   </div>
-                  <span style={{ fontSize: 13, color: "#e8dcc8" }}>🎒 荷物車にする</span>
+                  <span className="text-[13px] text-[#e8dcc8]">🎒 荷物車にする</span>
                 </div>
-                <button onClick={addCar} disabled={!newCarName.trim() || !newCarDriver.trim()} style={{ padding: "10px", borderRadius: 8, border: "none", background: (newCarName.trim() && newCarDriver.trim()) ? "#c8a84b" : "rgba(255,255,255,0.1)", color: (newCarName.trim() && newCarDriver.trim()) ? "#0d1b2a" : "#556677", fontSize: 13, fontWeight: "bold", cursor: (newCarName.trim() && newCarDriver.trim()) ? "pointer" : "not-allowed" }}>追加する</button>
+                <button
+                  onClick={addCar}
+                  disabled={!newCarName.trim() || !newCarDriver.trim()}
+                  className={`rounded-lg border-none p-2.5 text-[13px] font-bold ${
+                    newCarName.trim() && newCarDriver.trim()
+                      ? "cursor-pointer bg-[#c8a84b] text-[#0d1b2a]"
+                      : "cursor-not-allowed bg-white/10 text-[#556677]"
+                  }`}
+                >追加する</button>
               </div>
             </div>
 
             {/* 座席サマリー */}
             {availableCars.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-                <div style={{ padding: "12px 16px", borderRadius: 10, background: seatOk ? "rgba(168,216,92,0.1)" : "rgba(227,138,126,0.1)", border: `1px solid ${seatOk ? "#a8d85c66" : "#e38a7e66"}` }}>
-                  <div style={{ fontSize: 13, color: seatOk ? "#a8d85c" : "#e38a7e" }}>
+              <div className="mb-4 flex flex-col gap-2">
+                <div className={`rounded-[10px] border py-3 px-4 ${seatOk ? "border-[#a8d85c66] bg-[#a8d85c]/10" : "border-[#e38a7e66] bg-[#e38a7e]/10"}`}>
+                  <div className={`text-[13px] ${seatOk ? "text-[#a8d85c]" : "text-[#e38a7e]"}`}>
                     {seatOk ? "✓" : "⚠️"} 車 {availableCars.length}台 ／ 空き座席 {totalSeats}席 ／ 同乗者 {nonDriverCount}人
-                    {!seatOk && <div style={{ marginTop: 4, fontSize: 12 }}>座席が足りません。使う車を増やしてください。</div>}
+                    {!seatOk && <div className="mt-1 text-[12px]">座席が足りません。使う車を増やしてください。</div>}
                   </div>
                 </div>
-                <div style={{ padding: "12px 16px", borderRadius: 10, background: baggageCarOk ? "rgba(168,216,92,0.1)" : "rgba(227,138,126,0.1)", border: `1px solid ${baggageCarOk ? "#a8d85c66" : "#e38a7e66"}` }}>
-                  <div style={{ fontSize: 13, color: baggageCarOk ? "#a8d85c" : "#e38a7e" }}>
+                <div className={`rounded-[10px] border py-3 px-4 ${baggageCarOk ? "border-[#a8d85c66] bg-[#a8d85c]/10" : "border-[#e38a7e66] bg-[#e38a7e]/10"}`}>
+                  <div className={`text-[13px] ${baggageCarOk ? "text-[#a8d85c]" : "text-[#e38a7e]"}`}>
                     {baggageCarOk ? "✓ 🎒 荷物車あり" : "⚠️ 🎒 荷物車が選択されていません（菅原号または田中号を選択してください）"}
                   </div>
                 </div>
               </div>
             )}
 
-            <button onClick={handleGenerate} disabled={!canGenerate} style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: canGenerate ? "linear-gradient(135deg, #7ec8e3, #5ab8d3)" : "rgba(255,255,255,0.1)", color: canGenerate ? "#0d1b2a" : "#556677", fontSize: 15, fontWeight: "bold", cursor: canGenerate ? "pointer" : "not-allowed" }}>
+            <button
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+              className={`w-full rounded-xl border-none p-3.5 text-[15px] font-bold ${
+                canGenerate
+                  ? "cursor-pointer bg-gradient-to-br from-[#7ec8e3] to-[#5ab8d3] text-[#0d1b2a]"
+                  : "cursor-not-allowed bg-white/10 text-[#556677]"
+              }`}
+            >
               ⚾ 配車を自動生成する
             </button>
           </div>
@@ -422,50 +510,50 @@ export default function App() {
         {tab === "result" && (
           <div>
             {!result ? (
-              <div style={{ textAlign: "center", padding: 40, color: "#556677" }}>
-                <div style={{ fontSize: 40, marginBottom: 16 }}>⚾</div>
+              <div className="p-10 text-center text-[#556677]">
+                <div className="mb-4 text-[40px]">⚾</div>
                 <div>まず車・ドライバーを設定して配車を生成してください</div>
-                <button onClick={() => setTab("drive")} style={{ marginTop: 16, padding: "10px 24px", borderRadius: 20, border: "none", background: "#c8a84b", color: "#0d1b2a", fontSize: 13, fontWeight: "bold", cursor: "pointer" }}>車・ドライバー設定へ</button>
+                <button onClick={() => setTab("drive")} className="mt-4 cursor-pointer rounded-[20px] border-none bg-[#c8a84b] py-2.5 px-6 text-[13px] font-bold text-[#0d1b2a]">車・ドライバー設定へ</button>
               </div>
             ) : (
               <div>
-                <div style={{ marginBottom: 16, padding: "12px 16px", background: "rgba(200,168,75,0.1)", borderRadius: 10, border: "1px solid rgba(200,168,75,0.3)", fontSize: 13, color: "#c8a84b" }}>
+                <div className="mb-4 rounded-[10px] border border-[#c8a84b]/30 bg-[#c8a84b]/10 py-3 px-4 text-[13px] text-[#c8a84b]">
                   ✓ 配車が完了しました！参加者 {attendees.length}人 ／ {result.length}台
                 </div>
                 {result.map((car, i) => (
-                  <div key={i} style={{ marginBottom: 14, borderRadius: 14, overflow: "hidden", border: "1px solid rgba(200,168,75,0.3)", background: "rgba(255,255,255,0.03)" }}>
-                    <div style={{ padding: "12px 16px", background: "linear-gradient(135deg, #1a3a5c, #0d2137)", borderBottom: "1px solid rgba(200,168,75,0.3)", display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 20 }}>🚗</span>
+                  <div key={i} className="mb-3.5 overflow-hidden rounded-[14px] border border-[#c8a84b]/30 bg-white/[0.03]">
+                    <div className="flex items-center gap-2.5 border-b border-[#c8a84b]/30 bg-gradient-to-br from-[#1a3a5c] to-[#0d2137] py-3 px-4">
+                      <span className="text-[20px]">🚗</span>
                       <div>
-                        <div style={{ fontSize: 15, fontWeight: "bold", color: "#c8a84b" }}>
+                        <div className="text-[15px] font-bold text-[#c8a84b]">
                           {car.carName}
-                          {car.isBaggageCar && <span style={{ fontSize: 12, marginLeft: 8 }}>🎒 荷物車</span>}
+                          {car.isBaggageCar && <span className="ml-2 text-[12px]">🎒 荷物車</span>}
                         </div>
-                        <div style={{ fontSize: 11, color: "#7ec8e3" }}>
+                        <div className="text-[11px] text-[#7ec8e3]">
                           定員{car.capacity}人 ／ 乗車{car.passengers.length + 1}人
-                          {car.hasParent && <span style={{ marginLeft: 8, color: "#a8d85c" }}>✓ ママーズ同乗</span>}
+                          {car.hasParent && <span className="ml-2 text-[#a8d85c]">✓ ママーズ同乗</span>}
                         </div>
                       </div>
                     </div>
-                    <div style={{ padding: "12px 16px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(126,200,227,0.1)" }}>
+                    <div className="py-3 px-4">
+                      <div className="mb-2 flex items-center gap-2 rounded-lg bg-[#7ec8e3]/10 py-2 px-3">
                         <span>🧢</span>
-                        <span style={{ fontSize: 13, color: "#7ec8e3" }}>運転手：{car.driver.name}</span>
-                        <span style={{ fontSize: 11, color: roleColor[car.driver.role].text, marginLeft: "auto" }}>{roleLabel[car.driver.role]}</span>
+                        <span className="text-[13px] text-[#7ec8e3]">運転手：{car.driver.name}</span>
+                        <span className={`ml-auto text-[11px] ${ROLE_CLASSES[car.driver.role].sectionText}`}>{roleLabel[car.driver.role]}</span>
                       </div>
                       {car.passengers.length > 0 ? car.passengers.map((p, j) => (
-                        <div key={j} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderRadius: 8, marginBottom: 4, background: "rgba(255,255,255,0.03)" }}>
-                          <span style={{ fontSize: 12 }}>👤</span>
-                          <span style={{ fontSize: 13, color: "#e8dcc8" }}>{p.name}</span>
-                          <span style={{ fontSize: 11, color: roleColor[p.role].text, marginLeft: "auto" }}>{roleLabel[p.role]}</span>
+                        <div key={j} className="mb-1 flex items-center gap-2 rounded-lg bg-white/[0.03] py-[7px] px-3">
+                          <span className="text-[12px]">👤</span>
+                          <span className="text-[13px] text-[#e8dcc8]">{p.name}</span>
+                          <span className={`ml-auto text-[11px] ${ROLE_CLASSES[p.role].sectionText}`}>{roleLabel[p.role]}</span>
                         </div>
                       )) : (
-                        <div style={{ fontSize: 12, color: "#556677", padding: "6px 12px" }}>同乗者なし</div>
+                        <div className="py-1.5 px-3 text-[12px] text-[#556677]">同乗者なし</div>
                       )}
                     </div>
                   </div>
                 ))}
-                <button onClick={handleGenerate} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid rgba(200,168,75,0.5)", background: "transparent", color: "#c8a84b", fontSize: 14, fontWeight: "bold", cursor: "pointer", marginTop: 8 }}>
+                <button onClick={handleGenerate} className="mt-2 w-full cursor-pointer rounded-xl border border-[#c8a84b]/50 bg-transparent p-3 text-[14px] font-bold text-[#c8a84b]">
                   🔄 再配車する（シャッフル）
                 </button>
               </div>

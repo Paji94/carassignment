@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         riverCamera: resolve(__dirname, "river-camera.html"),
+        hamastaNightWatch: resolve(__dirname, "hamasta-night-watch.html"),
       },
     },
   },

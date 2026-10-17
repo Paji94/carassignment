@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ハマスタ ナイトウォッチ | ベイスターズ回替わりリマインダー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy-deep: #0a1b2e;
+    --navy-card: #12253c;
+    --navy-line: #24405e;
+    --star-yellow: #ffc72c;
+    --star-yellow-dim: #8a6a1a;
+    --field-green: #2f9e63;
+    --ink: #eef1f6;
+    --ink-dim: #9fb0c4;
+    --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--navy-deep);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(255,199,44,0.10), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 3px);
+  }
+  .wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 28px 18px 60px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 22px;
+  }
+  .kicker {
+    font-family: 'Oswald', sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    color: var(--field-green);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1.15;
+    margin: 0 0 8px;
+    color: var(--star-yellow);
+    text-shadow: 0 0 18px rgba(255,199,44,0.25);
+  }
+  .sub {
+    color: var(--ink-dim);
+    font-size: 14px;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  .scoreboard {
+    margin: 26px 0 18px;
+    background: var(--navy-card);
+    border: 1px solid var(--navy-line);
+    border-radius: 10px;
+    padding: 16px 10px;
+  }
+  .frames {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 5px;
+  }
+  .frame {
+    text-align: center;
+    padding: 8px 0 6px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.03);
+    position: relative;
+  }
+  .frame .num {
+    font-family: 'Oswald', sans-serif;
+    font-size: 16px;
+    color: var(--ink-dim);
+  }
+  .frame .dot {
+    display: block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--navy-line);
+    margin: 5px auto 0;
+  }
+  .frame.checkpoint {
+    background: rgba(255,199,44,0.08);
+    outline: 1px solid var(--star-yellow-dim);
+  }
+  .frame.checkpoint .num { color: var(--star-yellow); font-weight: 600; }
+  .frame.checkpoint .dot { background: var(--star-yellow); }
+  .frame.done .num { color: var(--field-green); }
+  .frame.done .dot { background: var(--field-green); }
+  .frame.next {
+    outline: 2px solid var(--star-yellow);
+    box-shadow: 0 0 14px rgba(255,199,44,0.35);
+  }
+  .scoreboard-caption {
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 11px;
+    margin-top: 10px;
+    letter-spacing: 0.02em;
+  }
+
+  .panel {
+    background: var(--navy-card);
+    border: 1px solid var(--navy-line);
+    border-radius: 10px;
+    padding: 18px 18px 20px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-family: 'Oswald', sans-serif;
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    margin: 0 0 12px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  label { display: block; font-size: 13px; color: var(--ink-dim); margin-bottom: 6px; }
+  input[type="time"] {
+    width: 100%;
+    background: var(--navy-deep);
+    border: 1px solid var(--navy-line);
+    color: var(--ink);
+    font-size: 20px;
+    font-family: 'Oswald', sans-serif;
+    padding: 10px 12px;
+    border-radius: 8px;
+  }
+  input[type="time"]:focus-visible { outline: 2px solid var(--star-yellow); outline-offset: 1px; }
+
+  .btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 13px 16px;
+    border-radius: 8px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 15px;
+    letter-spacing: 0.03em;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    box-sizing: border-box;
+  }
+  .btn:focus-visible { outline: 2px solid var(--star-yellow); outline-offset: 2px; }
+  .btn-primary {
+    background: var(--star-yellow);
+    color: #21170a;
+    margin-top: 14px;
+    font-weight: 600;
+  }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .btn-yahoo {
+    background: #ff0033;
+    color: #fff;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--navy-line);
+    color: var(--ink-dim);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .status-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 10px 2px;
+    border-top: 1px solid var(--navy-line);
+    font-size: 14px;
+  }
+  .status-line:first-of-type { border-top: none; }
+  .status-line .label { color: var(--ink-dim); }
+  .status-line .value { font-family: 'Oswald', sans-serif; color: var(--ink); }
+  .status-line .value.armed { color: var(--field-green); }
+  .status-line .value.fired { color: var(--star-yellow); }
+
+  .note {
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    line-height: 1.7;
+    margin: 4px 0 0;
+  }
+  .note strong { color: var(--ink); }
+
+  .banner {
+    display: none;
+    background: rgba(255,199,44,0.12);
+    border: 1px solid var(--star-yellow-dim);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .banner.show { display: block; }
+  .banner .title {
+    font-family: 'Oswald', sans-serif;
+    color: var(--star-yellow);
+    font-size: 16px;
+    margin: 0 0 4px;
+  }
+  .banner p { margin: 0 0 10px; font-size: 13.5px; color: var(--ink); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .frame.next { animation: pulse 1.8s ease-in-out infinite; }
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 14px rgba(255,199,44,0.35); }
+    50% { box-shadow: 0 0 22px rgba(255,199,44,0.6); }
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --navy-deep: #f4f1ea;
+      --navy-card: #ffffff;
+      --navy-line: #dcd6c8;
+      --ink: #1c2230;
+      --ink-dim: #6b7280;
+    }
+  }
+  :root[data-theme="dark"] {
+    --navy-deep: #0a1b2e;
+    --navy-card: #12253c;
+    --navy-line: #24405e;
+    --ink: #eef1f6;
+    --ink-dim: #9fb0c4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="kicker">YOKOHAMA DeNA BAYSTARS</p>
+    <h1>ハマスタ ナイトウォッチ</h1>
+    <p class="sub">試合開始時刻を入れておくと、3回裏・6回裏・9回裏の目安タイミングでこのページが通知します。実際のスコアはYahoo!で確認してください。</p>
+  </header>
+
+  <div class="scoreboard">
+    <div class="frames" id="frames"></div>
+    <p class="scoreboard-caption">黄色枠 = 通知タイミング（3・6・9回裏）</p>
+  </div>
+
+  <div class="banner" id="banner">
+    <p class="title" id="bannerTitle">3回裏になった頃です</p>
+    <p id="bannerBody">そろそろ3回裏。Yahoo!のスコア速報で今の状況を見てみましょう。</p>
+    <a class="btn btn-yahoo" id="bannerLink" href="https://baseball.yahoo.co.jp/npb/teams/3/top" target="_blank" rel="noopener">Yahoo!スコア速報を開く</a>
+  </div>
+
+  <div class="panel">
+    <h2>試合開始時刻</h2>
+    <label for="startTime">今日の開始予定・実際の開始時刻</label>
+    <input type="time" id="startTime" value="18:00">
+    <button class="btn btn-primary" id="armBtn">この時刻で通知をセットする</button>
+    <button class="btn btn-ghost" id="resetBtn" style="display:none;">リセットしてやり直す</button>
+    <p class="note" id="permNote"></p>
+  </div>
+
+  <div class="panel" id="statusPanel" style="display:none;">
+    <h2>通知の状況</h2>
+    <div id="statusLines"></div>
+  </div>
+
+  <div class="panel">
+    <h2>いつでも今の試合を見る</h2>
+    <a class="btn btn-yahoo" href="https://baseball.yahoo.co.jp/npb/teams/3/top" target="_blank" rel="noopener">Yahoo!スポーツナビでDeNAの試合を見る</a>
+    <p class="note">
+      <strong>目安の考え方：</strong> 1試合＝約9イニング・約3時間として、開始からおよそ50分後を3回裏、110分後を6回裏、165分後を9回裏の頃としています。実際は投手交代や延長で前後します。<br><br>
+      <strong>注意：</strong> このページを開いたタブを閉じたり、スマホの画面をロックすると通知は届きません。試合中はこのタブを開いたままにしておいてください。
+    </p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var OFFSETS = [
+    { key: 3, label: '3回裏', minutes: 50 },
+    { key: 6, label: '6回裏', minutes: 110 },
+    { key: 9, label: '9回裏', minutes: 165 }
+  ];
+  var YAHOO_URL = 'https://baseball.yahoo.co.jp/npb/teams/3/top';
+  var STORAGE_KEY = 'baystars-inning-watch:v1';
+
+  var framesEl = document.getElementById('frames');
+  var startInput = document.getElementById('startTime');
+  var armBtn = document.getElementById('armBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var permNote = document.getElementById('permNote');
+  var statusPanel = document.getElementById('statusPanel');
+  var statusLines = document.getElementById('statusLines');
+  var banner = document.getElementById('banner');
+  var bannerTitle = document.getElementById('bannerTitle');
+  var bannerBody = document.getElementById('bannerBody');
+
+  var timers = [];
+  var targets = null; // array of {key,label,time:Date,fired:bool}
+
+  function buildFrames(activeKeys) {
+    framesEl.innerHTML = '';
+    for (var i = 1; i <= 9; i++) {
+      var div = document.createElement('div');
+      div.className = 'frame';
+      if (i === 3 || i === 6 || i === 9) div.className += ' checkpoint';
+      div.id = 'frame-' + i;
+      div.innerHTML = '<span class="num">' + i + '</span><span class="dot"></span>';
+      framesEl.appendChild(div);
+    }
+  }
+  buildFrames();
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) { return null; }
+  }
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function clearState() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  function formatTime(d) {
+    var h = d.getHours().toString().padStart(2, '0');
+    var m = d.getMinutes().toString().padStart(2, '0');
+    return h + ':' + m;
+  }
+
+  function renderStatus() {
+    if (!targets) { statusPanel.style.display = 'none'; return; }
+    statusPanel.style.display = 'block';
+    statusLines.innerHTML = '';
+    var now = new Date();
+    var nextKey = null;
+    targets.forEach(function (t) {
+      if (!t.fired && t.time.getTime() > now.getTime() && nextKey === null) nextKey = t.key;
+    });
+    targets.forEach(function (t) {
+      var row = document.createElement('div');
+      row.className = 'status-line';
+      var valClass = 'value';
+      var valText = formatTime(t.time) + ' 頃';
+      if (t.fired) { valClass += ' fired'; valText = formatTime(t.time) + ' 頃（通知済み）'; }
+      else if (t.time.getTime() <= now.getTime()) { valClass += ' fired'; valText = formatTime(t.time) + ' 頃（経過）'; }
+      else { valClass += ' armed'; }
+      row.innerHTML = '<span class="label">' + t.label + '</span><span class="' + valClass + '">' + valText + '</span>';
+      statusLines.appendChild(row);
+
+      var frame = document.getElementById('frame-' + t.key);
+      if (frame) {
+        frame.classList.remove('next', 'done');
+        if (t.fired || t.time.getTime() <= now.getTime()) frame.classList.add('done');
+        else if (t.key === nextKey) frame.classList.add('next');
+      }
+    });
+  }
+
+  function notify(t) {
+    var title = t.label + 'になった頃です⚾';
+    var body = 'Yahoo!のスコア速報で今の状況を確認しましょう。';
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        var n = new Notification(title, { body: body, tag: 'baystars-' + t.key });
+        n.onclick = function () { window.focus(); window.open(YAHOO_URL, '_blank'); };
+      } catch (e) {}
+    }
+    bannerTitle.textContent = title;
+    bannerBody.textContent = body;
+    banner.classList.add('show');
+    if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
+  }
+
+  function scheduleFromTargets() {
+    timers.forEach(function (id) { clearTimeout(id); });
+    timers = [];
+    var now = new Date();
+    targets.forEach(function (t) {
+      if (t.fired) return;
+      var delay = t.time.getTime() - now.getTime();
+      if (delay <= 0) return;
+      var id = setTimeout(function () {
+        t.fired = true;
+        saveState({ start: startInput.value, targets: targets.map(function (x) { return { key: x.key, time: x.time.getTime(), fired: x.fired }; }) });
+        notify(t);
+        renderStatus();
+      }, delay);
+      timers.push(id);
+    });
+  }
+
+  function arm(startStr, restoredTargets) {
+    if (restoredTargets) {
+      targets = restoredTargets.map(function (x) {
+        var found = OFFSETS.find(function (o) { return o.key === x.key; });
+        return { key: x.key, label: found.label, time: new Date(x.time), fired: x.fired };
+      });
+    } else {
+      var parts = startStr.split(':');
+      var base = new Date();
+      base.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+      targets = OFFSETS.map(function (o) {
+        return { key: o.key, label: o.label, time: new Date(base.getTime() + o.minutes * 60000), fired: false };
+      });
+      saveState({ start: startStr, targets: targets.map(function (x) { return { key: x.key, time: x.time.getTime(), fired: x.fired }; }) });
+    }
+    scheduleFromTargets();
+    renderStatus();
+    armBtn.style.display = 'none';
+    startInput.disabled = true;
+    resetBtn.style.display = 'block';
+  }
+
+  function reset() {
+    timers.forEach(function (id) { clearTimeout(id); });
+    timers = [];
+    targets = null;
+    clearState();
+    banner.classList.remove('show');
+    buildFrames();
+    statusPanel.style.display = 'none';
+    armBtn.style.display = 'block';
+    startInput.disabled = false;
+    resetBtn.style.display = 'none';
+  }
+
+  armBtn.addEventListener('click', function () {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(function (perm) {
+        if (perm !== 'granted') {
+          permNote.textContent = '通知の許可がないので、この画面上のお知らせだけで代用します。タブを開いたままにしておいてください。';
+        }
+        arm(startInput.value);
+      });
+    } else {
+      if ('Notification' in window && Notification.permission === 'denied') {
+        permNote.textContent = '通知がブロックされています。ブラウザの設定から許可すると、画面を見ていなくても通知できます。';
+      }
+      arm(startInput.value);
+    }
+  });
+
+  resetBtn.addEventListener('click', reset);
+
+  // restore on load
+  var saved = loadState();
+  if (saved && saved.targets) {
+    arm(null, saved.targets);
+  }
+
+  setInterval(renderStatus, 15000);
+})();
+</script>
+</body>
+</html>

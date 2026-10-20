@@ -12,10 +12,34 @@ export const TIMEZONE = "Asia/Tokyo";
 
 export const CHECK_INTERVAL_CRON = "*/5 * * * *";
 
-export const DELAY_API_ENDPOINT =
-  process.env.DELAY_API_ENDPOINT ?? "https://tetsudo.rti-giken.jp/free/delay.json";
+/**
+ * 公共交通オープンデータセンター（ODPT: Open Data Platform for Transportation）の
+ * 運行情報（TrainInformation）API。
+ * 利用には https://www.odpt.org / https://developer-dc.odpt.org でのアカウント登録と
+ * consumerKey の取得が必要（無料）。
+ *
+ * 注意: このリポジトリの開発環境からは外部ネットワークへのアクセスが制限されており、
+ * 実際のAPIレスポンス（フィールド名・事業者ID・路線IDの正確な表記）を直接検証できて
+ * いない。本番投入前に、取得した consumerKey で実際にAPIを叩き、
+ * `src/lib/odakyuStatus.ts` のパース処理（特に ODPT_OPERATOR の値や
+ * odpt:trainInformationText / odpt:trainInformationStatus のフィールド名）が
+ * 実レスポンスと一致しているか必ず確認すること。
+ */
+export const ODPT_API_BASE =
+  process.env.ODPT_API_BASE ?? "https://api.odpt.org/api/v4/odpt:TrainInformation";
 
-export const ODAKYU_STATUS_PAGE = process.env.ODAKYU_STATUS_PAGE ?? "https://www.odakyu.jp/unko/";
+/** ODPTの事業者ID。小田急電鉄は odpt.Operator:Odakyu という表記が一般的（要確認）。 */
+export const ODPT_OPERATOR = process.env.ODPT_OPERATOR ?? "odpt.Operator:Odakyu";
+
+/** ODPTのAPIキー。developer-dc.odpt.org 等で登録して取得する。 */
+export const ODPT_CONSUMER_KEY = process.env.ODPT_CONSUMER_KEY ?? "";
+
+/**
+ * APIキーを渡すクエリパラメータ名。ODPTのバージョンによって
+ * `acl:consumerKey` が使われることが多いが、変更された場合に備えて
+ * 環境変数で上書きできるようにしている。
+ */
+export const ODPT_CONSUMER_KEY_PARAM = process.env.ODPT_CONSUMER_KEY_PARAM ?? "acl:consumerKey";
 
 export const REASON_KEYWORDS = [
   "人身事故",

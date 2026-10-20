@@ -1,7 +1,10 @@
 import {
-  DELAY_API_ENDPOINT,
   DELAY_KEYWORDS,
   LINE_KEYWORDS,
+  ODPT_API_BASE,
+  ODPT_CONSUMER_KEY,
+  ODPT_CONSUMER_KEY_PARAM,
+  ODPT_OPERATOR,
   REASON_KEYWORDS,
   SUSPENDED_KEYWORDS,
 } from "./config";
@@ -18,36 +21,46 @@ export interface OdakyuStatus {
   observedAt: string;
   /** 元データのテキスト全文（デバッグ・表示用） */
   rawText: string;
-  source: "rti-giken" | "unknown";
+  source: "odpt" | "unknown";
 }
 
-interface RawDelayEntry {
+interface OdptLocalizedText {
+  ja?: string;
+  en?: string;
+  [lang: string]: string | undefined;
+}
+
+interface OdptTrainInformationEntry {
+  "odpt:operator"?: string;
+  "odpt:railway"?: string;
+  "odpt:trainInformationStatus"?: OdptLocalizedText | string;
+  "odpt:trainInformationText"?: OdptLocalizedText | string;
   [key: string]: unknown;
 }
 
-function pickString(entry: RawDelayEntry, keys: string[]): string {
-  for (const key of keys) {
-    const value = entry[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return "";
+function localizedJa(value: OdptLocalizedText | string | undefined): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value.ja?.trim() ?? "";
 }
 
 function includesAny(text: string, keywords: readonly string[]): boolean {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
-function matchesOdakyu(entry: RawDelayEntry): boolean {
-  const name = pickString(entry, ["name", "line", "company", "railway"]);
-  const title = pickString(entry, ["title"]);
-  return includesAny(name, LINE_KEYWORDS) || includesAny(title, LINE_KEYWORDS);
+function matchesOdakyu(entry: OdptTrainInformationEntry): boolean {
+  const operator = entry["odpt:operator"] ?? "";
+  const railway = entry["odpt:railway"] ?? "";
+  if (operator.includes("Odakyu") || railway.includes("Odakyu")) return true;
+  // 事業者ID/路線IDの表記が想定と異なるケースに備え、日本語名でも保険をかける
+  return includesAny(operator, LINE_KEYWORDS) || includesAny(railway, LINE_KEYWORDS);
 }
 
 function detectLevel(text: string): DelayLevel {
   if (includesAny(text, SUSPENDED_KEYWORDS)) return "suspended";
   if (includesAny(text, DELAY_KEYWORDS)) return "delay";
+  // NORMAL_KEYWORDSに一致しなくても、遅延/見合わせの既知キーワードが
+  // 含まれていない時点で平常運転とみなす（未知の文言で誤通知しないため）
   return "normal";
 }
 
@@ -98,51 +111,68 @@ function normalStatus(source: OdakyuStatus["source"], observedAt: string): Odaky
 interface FetchOptions {
   fetchImpl?: typeof fetch;
   endpoint?: string;
+  consumerKey?: string;
 }
 
 /**
- * 遅延情報APIから小田急線の運行状況を取得する。
+ * ODPT（公共交通オープンデータセンター）のTrainInformation APIから
+ * 小田急線の運行状況を取得する。
  * 複数路線がヒットした場合は最も深刻な状態（運転見合わせ > 遅延 > 平常）を採用する。
  */
 export async function fetchOdakyuStatus(options: FetchOptions = {}): Promise<OdakyuStatus> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const endpoint = options.endpoint ?? DELAY_API_ENDPOINT;
+  const consumerKey = options.consumerKey ?? ODPT_CONSUMER_KEY;
+
+  if (!consumerKey) {
+    throw new Error(
+      "ODPT_CONSUMER_KEY が未設定です。https://www.odpt.org でアカウント登録し、取得したconsumerKeyを設定してください。"
+    );
+  }
+
+  const base = options.endpoint ?? ODPT_API_BASE;
+  const url = new URL(base);
+  url.searchParams.set("odpt:operator", ODPT_OPERATOR);
+  url.searchParams.set(ODPT_CONSUMER_KEY_PARAM, consumerKey);
+
   const observedAt = new Date().toISOString();
 
-  const res = await fetchImpl(endpoint, {
+  const res = await fetchImpl(url.toString(), {
     headers: { "User-Agent": "TrainWatch/1.0 (+https://github.com/)" },
     cache: "no-store",
   });
 
   if (!res.ok) {
-    throw new Error(`delay info api responded with ${res.status}`);
+    throw new Error(`ODPT TrainInformation API responded with ${res.status}`);
   }
 
   const json = (await res.json()) as unknown;
-  const entries = Array.isArray(json) ? (json as RawDelayEntry[]) : [];
+  const entries = Array.isArray(json) ? (json as OdptTrainInformationEntry[]) : [];
   return parseEntries(entries, observedAt);
 }
 
 /** network / JSON パース処理を含まない純粋関数。ユニットテスト用に公開。 */
-export function parseEntries(entries: RawDelayEntry[], observedAt: string): OdakyuStatus {
+export function parseEntries(entries: OdptTrainInformationEntry[], observedAt: string): OdakyuStatus {
   const odakyuEntries = entries.filter(matchesOdakyu);
   if (odakyuEntries.length === 0) {
-    return normalStatus("rti-giken", observedAt);
+    return normalStatus("odpt", observedAt);
   }
 
   const severityOrder: DelayLevel[] = ["suspended", "delay", "normal"];
   let best: OdakyuStatus | null = null;
 
   for (const entry of odakyuEntries) {
-    const text = pickString(entry, ["description", "title", "body", "text"]);
-    const level = detectLevel(text);
+    const statusText = localizedJa(entry["odpt:trainInformationStatus"]);
+    const detailText = localizedJa(entry["odpt:trainInformationText"]);
+    const text = [statusText, detailText].filter(Boolean).join(" ") || detailText || statusText;
+    const level = detectLevel(text || statusText);
+
     const candidate: OdakyuStatus = {
       level,
       section: extractSection(text),
-      reason: extractReason(text) ?? (level === "normal" ? null : text.slice(0, 60)),
+      reason: extractReason(text) ?? (level === "normal" ? null : text.slice(0, 60) || null),
       observedAt,
       rawText: text,
-      source: "rti-giken",
+      source: "odpt",
     };
 
     if (!best || severityOrder.indexOf(candidate.level) < severityOrder.indexOf(best.level)) {
@@ -150,5 +180,5 @@ export function parseEntries(entries: RawDelayEntry[], observedAt: string): Odak
     }
   }
 
-  return best ?? normalStatus("rti-giken", observedAt);
+  return best ?? normalStatus("odpt", observedAt);
 }

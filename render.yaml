@@ -16,6 +16,8 @@ services:
         sync: false
       - key: VAPID_CONTACT_EMAIL
         sync: false
+      - key: ODPT_CONSUMER_KEY
+        sync: false
       - key: CRON_SECRET
         sync: false
       - key: DATA_DIR

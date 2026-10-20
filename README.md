@@ -15,7 +15,7 @@
 - **Next.js (App Router) + TypeScript** によるPWA
 - `server.js`: Next.jsのカスタムサーバー。`node-cron` で5分おきに監視サイクル (`/api/cron/check`) を実行
 - `src/lib/odakyuStatus.ts`: 運行情報を取得・パースし、遅延/運転見合わせを判定
-  - 既定のデータソースは無料の鉄道遅延情報API（[tetsudo.rti-giken.jp](https://tetsudo.rti-giken.jp/)）
+  - データソースは[公共交通オープンデータセンター（ODPT）](https://www.odpt.org)のTrainInformation API
   - 区間・理由の抽出はテキストからのヒューリスティック抽出のため、完全ではありません（後述）
 - `src/lib/operatingHours.ts`: 深夜（既定 01:30〜04:30 JST）は監視をスキップ
 - `src/lib/push.ts`: Web Push（VAPID）で購読端末に通知を送信
@@ -39,8 +39,16 @@ npm run dev                    # http://localhost:3000
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push用の鍵ペア（`npm run generate-vapid-keys` で生成） |
 | `VAPID_CONTACT_EMAIL` | VAPIDに必要な連絡先（`mailto:...`） |
 | `CRON_SECRET` | `/api/cron/check` を外部スケジューラから呼ぶ場合の共有シークレット（任意） |
-| `DELAY_API_ENDPOINT` | 運行情報の取得元API（既定はrti-giken鉄道遅延情報API） |
+| `ODPT_CONSUMER_KEY` | [公共交通オープンデータセンター](https://www.odpt.org)で登録して取得するAPIキー（必須） |
 | `QUIET_HOURS_START` / `QUIET_HOURS_END` | 監視を休止する時間帯（終電後〜始発前） |
+
+### ODPT（公共交通オープンデータセンター）のセットアップ
+
+1. [https://www.odpt.org](https://www.odpt.org) または [https://developer-dc.odpt.org](https://developer-dc.odpt.org) でアカウントを登録（無料）
+2. 承認後に発行される consumerKey を取得
+3. `.env.local`（またはRenderの環境変数）に `ODPT_CONSUMER_KEY` として設定
+
+> **重要**: 開発環境から外部APIへのアクセスが制限されていたため、実際のODPT APIレスポンス（フィールド名や小田急電鉄の事業者ID表記）を直接検証できていません。`ODPT_OPERATOR`の既定値は `odpt.Operator:Odakyu` としていますが、consumerKey取得後に一度 `curl` 等で実際のレスポンスを確認し、想定と異なる場合は `src/lib/odakyuStatus.ts` のパース処理（`matchesOdakyu` / `odpt:trainInformationText` 等のフィールド名）と `.env.local` の `ODPT_OPERATOR` / `ODPT_CONSUMER_KEY_PARAM` を実際の仕様に合わせて調整してください。
 
 ## スマホでの使い方
 
@@ -66,6 +74,7 @@ Render / Railway / VPS など、Node.jsプロセスを常駐できる環境に�
    - 無料プランで試したい場合はRenderダッシュボードでプランを `free` に変更してください。ただし**無料プランは一定時間アクセスがないとスリープし、その間は5分おきの監視が止まります**（後述のGitHub Actionsで補完可能）。また無料プランには永続ディスクを付けられないため、再デプロイのたびに購読情報がリセットされます
 3. デプロイ完了後、Renderの **Environment** タブで以下を設定し、再デプロイ
    - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_CONTACT_EMAIL`（ローカルで `npm run generate-vapid-keys` を実行して生成した値）
+   - `ODPT_CONSUMER_KEY`（[公共交通オープンデータセンター](https://www.odpt.org)で登録して取得）
    - `CRON_SECRET`（任意の文字列。外部スケジューラ利用時のみ必要）
 
 > **Note**: `render.yaml` の `buildCommand` は `npm install --include=dev` としています。Renderのようなホスティング環境では `NODE_ENV=production` の状態で `npm install` が走ると、npmの仕様で `devDependencies`（`typescript` など）が自動的にスキップされ、TypeScriptのビルドが失敗します。`--include=dev` で明示的にインストールすることでこれを回避しています。
@@ -77,7 +86,7 @@ Render / Railway / VPS など、Node.jsプロセスを常駐できる環境に�
 
 - **通知音を「3秒で止まるチャイム」に完全固定することはできません。** Web Push通知の音はOS/ブラウザの既定通知音に依存し、Webアプリ側から音源や再生時間を指定することはブラウザの仕様上できません。本アプリでは、通知タップでアプリを開いた瞬間に、アプリ内でWeb Audio APIを使って合成した3秒のチャイムを再生することでこれに近い体験を実現しています。通知そのものの音を完全にカスタマイズしたい場合は、Androidアプリとして独自の通知チャンネル（カスタムサウンド指定可能）を持つネイティブアプリ化が必要です。
 - **区間・理由の自動抽出はヒューリスティックです。** 運行情報のテキストから正規表現で「駅名〜駅名」「事象キーワード」を抽出しているため、表記ゆれによっては正しく抽出できない場合があります。その場合は元のテキスト全文が理由欄にフォールバック表示されます。
-- **運行情報APIは非公式の無料APIを利用しています。** 小田急電鉄公式のリアルタイムAPIは一般公開されていないため、鉄道遅延情報の公開JSON APIをデータソースとしています。エンドポイントのレスポンス仕様が変わった場合は `src/lib/odakyuStatus.ts` の調整が必要です。
+- **ODPT APIの実レスポンスは未検証です。** 開発環境のネットワーク制限により、公共交通オープンデータセンターの実際のレスポンス（フィールド名・事業者IDの表記）を直接確認できていません。利用開始前に、取得したconsumerKeyで実際にAPIを叩いて期待通りに動くか確認してください（詳細は上記セットアップ手順を参照）。
 
 ## テスト
 

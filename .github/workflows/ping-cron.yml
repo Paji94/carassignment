@@ -1,0 +1,23 @@
+name: Ping Train Watch check endpoint
+
+# server.js の node-cron が既に5分おきに監視サイクルを実行するため、
+# 常時起動プラン(Renderの Starter 以上など)を使う場合は本ワークフローは不要です。
+# 無料プランなどインスタンスがスリープする環境で使う場合にのみ有効化してください
+# (Settings > Secrets and variables > Actions で APP_URL と CRON_SECRET を設定し、
+#  下の `if: false` を削除してください)。
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    if: false # 有効化する場合はこの行を削除してください
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/check
+        run: |
+          curl -sS -X POST "${{ secrets.APP_URL }}/api/cron/check" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 60

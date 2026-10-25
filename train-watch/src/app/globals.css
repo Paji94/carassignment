@@ -1,0 +1,246 @@
+:root {
+  --odakyu-blue: #0a5eb3;
+  --odakyu-blue-dark: #063e78;
+  --odakyu-blue-light: #4f9ce0;
+  --odakyu-accent: #f2a900;
+  --status-normal: #1f9d55;
+  --status-delay: #f2a900;
+  --status-suspended: #e0342a;
+  --bg: #f3f6fb;
+  --card-bg: #ffffff;
+  --text-main: #17233a;
+  --text-sub: #5a6b85;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text-main);
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI", system-ui, sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.line-header {
+  background: linear-gradient(135deg, var(--odakyu-blue) 0%, var(--odakyu-blue-dark) 100%);
+  color: white;
+  padding: 20px 20px 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.line-header__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.line-header__title {
+  margin: 14px 0 4px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.line-header__subtitle {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  height: 6px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 20px;
+  opacity: 0.55;
+}
+
+.track::before {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.track span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: white;
+  position: relative;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+  width: 100%;
+  margin: -18px auto 0;
+}
+
+.status-card {
+  background: var(--card-bg);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(10, 40, 90, 0.12);
+  padding: 22px;
+  border-top: 6px solid var(--status-level-color, var(--status-normal));
+}
+
+.status-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--status-level-color, var(--status-normal));
+}
+
+.status-card__badge::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--status-level-color, var(--status-normal));
+}
+
+.status-card__headline {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 10px 0 4px;
+}
+
+.status-card__updated {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin: 0;
+}
+
+.detail-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-list li {
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+  padding: 10px 12px;
+  background: #f5f8fd;
+  border-radius: 10px;
+}
+
+.detail-list dt {
+  min-width: 64px;
+  font-weight: 700;
+  color: var(--odakyu-blue);
+}
+
+.detail-list dd {
+  margin: 0;
+  color: var(--text-main);
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: 18px;
+  box-shadow: 0 6px 20px rgba(10, 40, 90, 0.08);
+  padding: 18px 20px;
+}
+
+.card h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.card p {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.button--primary {
+  background: var(--odakyu-blue);
+  color: white;
+}
+
+.button--danger {
+  background: #fdeceb;
+  color: var(--status-suspended);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button:not(:disabled):active {
+  opacity: 0.85;
+}
+
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef3fb;
+  color: var(--odakyu-blue);
+}
+
+.footer-note {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-sub);
+  padding: 10px 20px 26px;
+}

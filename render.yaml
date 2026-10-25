@@ -5,6 +5,7 @@ services:
     plan: starter
     region: singapore
     branch: claude/train-watch-app-vwq017
+    rootDir: train-watch
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/status

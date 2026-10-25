@@ -1,11 +1,8 @@
 import {
   DELAY_KEYWORDS,
-  LINE_KEYWORDS,
-  ODPT_API_BASE,
-  ODPT_CONSUMER_KEY,
-  ODPT_CONSUMER_KEY_PARAM,
-  ODPT_OPERATOR,
+  ODAKYU_STATUS_URL,
   REASON_KEYWORDS,
+  RESUMED_KEYWORDS,
   SUSPENDED_KEYWORDS,
 } from "./config";
 
@@ -21,47 +18,53 @@ export interface OdakyuStatus {
   observedAt: string;
   /** 元データのテキスト全文（デバッグ・表示用） */
   rawText: string;
-  source: "odpt" | "unknown";
-}
-
-interface OdptLocalizedText {
-  ja?: string;
-  en?: string;
-  [lang: string]: string | undefined;
-}
-
-interface OdptTrainInformationEntry {
-  "odpt:operator"?: string;
-  "odpt:railway"?: string;
-  "odpt:trainInformationStatus"?: OdptLocalizedText | string;
-  "odpt:trainInformationText"?: OdptLocalizedText | string;
-  [key: string]: unknown;
-}
-
-function localizedJa(value: OdptLocalizedText | string | undefined): string {
-  if (!value) return "";
-  if (typeof value === "string") return value;
-  return value.ja?.trim() ?? "";
+  source: "odakyu-official" | "unknown";
 }
 
 function includesAny(text: string, keywords: readonly string[]): boolean {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
-function matchesOdakyu(entry: OdptTrainInformationEntry): boolean {
-  const operator = entry["odpt:operator"] ?? "";
-  const railway = entry["odpt:railway"] ?? "";
-  if (operator.includes("Odakyu") || railway.includes("Odakyu")) return true;
-  // 事業者ID/路線IDの表記が想定と異なるケースに備え、日本語名でも保険をかける
-  return includesAny(operator, LINE_KEYWORDS) || includesAny(railway, LINE_KEYWORDS);
-}
-
 function detectLevel(text: string): DelayLevel {
   if (includesAny(text, SUSPENDED_KEYWORDS)) return "suspended";
   if (includesAny(text, DELAY_KEYWORDS)) return "delay";
-  // NORMAL_KEYWORDSに一致しなくても、遅延/見合わせの既知キーワードが
-  // 含まれていない時点で平常運転とみなす（未知の文言で誤通知しないため）
+  // 既知のキーワードに一致しない場合は、未知の文言で誤通知しないよう平常運転扱いにする
   return "normal";
+}
+
+/**
+ * HTML文字列から、タグを取り除いたプレーンテキストを生成する。
+ * ページの正確なDOM構造が分からない状態でも、とりあえずテキストベースで
+ * キーワード検出できるようにするための簡易変換。
+ */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|tr|h[1-6]|section|article)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/[ \t　]+/g, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** 駅名の前方に紛れ込みやすい助詞・区切り文字。抽出後にこれらより前の部分を切り捨てる。 */
+const LEADING_NOISE_CHARS = ["は", "が", "を", "に", "の", "と", "へ", "も", "で", "、", "。", "・"];
+
+function trimLeadingNoise(name: string): string {
+  let lastIndex = -1;
+  for (const ch of LEADING_NOISE_CHARS) {
+    const idx = name.lastIndexOf(ch);
+    if (idx > lastIndex) lastIndex = idx;
+  }
+  return lastIndex >= 0 ? name.slice(lastIndex + 1) : name;
 }
 
 /**
@@ -70,13 +73,15 @@ function detectLevel(text: string): DelayLevel {
  * 実データの表記ゆれに完全対応するものではなく、抽出できない場合は null を返す。
  */
 export function extractSection(text: string): string | null {
-  // 駅名は概ね10文字以内という前提で、区切り文字（〜など）の前後を最短一致で取り出す。
-  // 2つ目の駅名の直後は「間」「、」「,」「空白」「文末」のいずれかで終わっている想定。
+  // 駅名本体は長くても10文字程度だが、「人身事故の影響で新宿駅」のように
+  // 直前の理由フレーズを巻き込んで長めに一致することがあるため、
+  // 一致範囲自体は広めに取り、抽出後に trimLeadingNoise で助詞以前を切り捨てる。
   const pattern =
-    /([ぁ-んァ-ヶ一-龠a-zA-Z0-9]{1,10}?)(?:駅)?\s*[〜～\-－ー]\s*([ぁ-んァ-ヶ一-龠a-zA-Z0-9]{1,10}?)(?:駅)?(?=間|、|,|\s|$)/;
+    /([ぁ-んァ-ヶ一-龠a-zA-Z0-9]{1,14}?)(?:駅)?\s*[〜～\-－ー]\s*([ぁ-んァ-ヶ一-龠a-zA-Z0-9]{1,14}?)(?:駅)?(?=間|、|,|\s|$)/;
   const match = text.match(pattern);
   if (!match) return null;
-  const [, from, to] = match;
+  const from = trimLeadingNoise(match[1]);
+  const to = trimLeadingNoise(match[2]);
   if (!from || !to) return null;
   return `${from}〜${to}`;
 }
@@ -110,69 +115,62 @@ function normalStatus(source: OdakyuStatus["source"], observedAt: string): Odaky
 
 interface FetchOptions {
   fetchImpl?: typeof fetch;
-  endpoint?: string;
-  consumerKey?: string;
+  url?: string;
 }
 
 /**
- * ODPT（公共交通オープンデータセンター）のTrainInformation APIから
- * 小田急線の運行状況を取得する。
- * 複数路線がヒットした場合は最も深刻な状態（運転見合わせ > 遅延 > 平常）を採用する。
+ * 小田急電鉄公式の運行状況ページを取得し、小田急線の運行状況を判定する。
+ * ページ内に複数の告知が並んでいる場合は、最も深刻な状態
+ * （運転見合わせ > 遅延 > 平常）を採用する。既に運転再開済みの告知は無視する。
  */
 export async function fetchOdakyuStatus(options: FetchOptions = {}): Promise<OdakyuStatus> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const consumerKey = options.consumerKey ?? ODPT_CONSUMER_KEY;
-
-  if (!consumerKey) {
-    throw new Error(
-      "ODPT_CONSUMER_KEY が未設定です。https://www.odpt.org でアカウント登録し、取得したconsumerKeyを設定してください。"
-    );
-  }
-
-  const base = options.endpoint ?? ODPT_API_BASE;
-  const url = new URL(base);
-  url.searchParams.set("odpt:operator", ODPT_OPERATOR);
-  url.searchParams.set(ODPT_CONSUMER_KEY_PARAM, consumerKey);
-
+  const url = options.url ?? ODAKYU_STATUS_URL;
   const observedAt = new Date().toISOString();
 
-  const res = await fetchImpl(url.toString(), {
+  const res = await fetchImpl(url, {
     headers: { "User-Agent": "TrainWatch/1.0 (+https://github.com/)" },
     cache: "no-store",
   });
 
   if (!res.ok) {
-    throw new Error(`ODPT TrainInformation API responded with ${res.status}`);
+    throw new Error(`Odakyu status page responded with ${res.status}`);
   }
 
-  const json = (await res.json()) as unknown;
-  const entries = Array.isArray(json) ? (json as OdptTrainInformationEntry[]) : [];
-  return parseEntries(entries, observedAt);
+  const html = await res.text();
+  return parseHtml(html, observedAt);
 }
 
-/** network / JSON パース処理を含まない純粋関数。ユニットテスト用に公開。 */
-export function parseEntries(entries: OdptTrainInformationEntry[], observedAt: string): OdakyuStatus {
-  const odakyuEntries = entries.filter(matchesOdakyu);
-  if (odakyuEntries.length === 0) {
-    return normalStatus("odpt", observedAt);
-  }
+/** HTML取得処理を含まない純粋関数。ユニットテスト用に公開。 */
+export function parseHtml(html: string, observedAt: string): OdakyuStatus {
+  return parseStatusText(htmlToText(html), observedAt);
+}
+
+/** テキスト抽出済みの内容から状態を判定する純粋関数。ユニットテスト用に公開。 */
+export function parseStatusText(text: string, observedAt: string): OdakyuStatus {
+  // 行・文単位に分割し、それぞれを独立した告知として扱う
+  const segments = text
+    .split(/\n+/)
+    .flatMap((line) => line.split("。"))
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const severityOrder: DelayLevel[] = ["suspended", "delay", "normal"];
   let best: OdakyuStatus | null = null;
 
-  for (const entry of odakyuEntries) {
-    const statusText = localizedJa(entry["odpt:trainInformationStatus"]);
-    const detailText = localizedJa(entry["odpt:trainInformationText"]);
-    const text = [statusText, detailText].filter(Boolean).join(" ") || detailText || statusText;
-    const level = detectLevel(text || statusText);
+  for (const segment of segments) {
+    if (includesAny(segment, RESUMED_KEYWORDS)) continue; // 運転再開済みの告知は現在の状態としてカウントしない
+
+    const level = detectLevel(segment);
+    if (level === "normal") continue;
 
     const candidate: OdakyuStatus = {
       level,
-      section: extractSection(text),
-      reason: extractReason(text) ?? (level === "normal" ? null : text.slice(0, 60) || null),
+      section: extractSection(segment),
+      reason: extractReason(segment) ?? segment.slice(0, 60),
       observedAt,
-      rawText: text,
-      source: "odpt",
+      rawText: segment,
+      source: "odakyu-official",
     };
 
     if (!best || severityOrder.indexOf(candidate.level) < severityOrder.indexOf(best.level)) {
@@ -180,5 +178,5 @@ export function parseEntries(entries: OdptTrainInformationEntry[], observedAt: s
     }
   }
 
-  return best ?? normalStatus("odpt", observedAt);
+  return best ?? normalStatus("odakyu-official", observedAt);
 }

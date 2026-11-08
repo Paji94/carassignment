@@ -47,6 +47,10 @@
   #mic.on { background: var(--red); color: #fff; border-color: var(--red); animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: .75; } }
   #heard { min-height: 1.6em; color: var(--ink-dim); font-size: 14px; margin: 10px 0; }
+  .hint { color: var(--ink-dim); font-size: 13px; line-height: 1.6; margin: 8px 0 0; }
+  .miclog { margin-top: 10px; font-size: 12px; color: var(--ink-dim); }
+  .miclog summary { cursor: pointer; }
+  .miclog pre { white-space: pre-wrap; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin: 6px 0 0; max-height: 220px; overflow: auto; }
   form { display: flex; gap: 8px; margin-top: 10px; }
   form input { flex: 1; min-width: 0; font: inherit; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
   .verdict { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
@@ -74,7 +78,7 @@
 
   <section id="screen-start">
     <h1>故事成語テスト</h1>
-    <p class="sub">中学校の定期テスト・高校入試に出る <span id="word-count">27</span> 語を、声で答えて覚えよう。</p>
+    <p class="sub">教科書「今に生きる言葉」の故事成語 <span id="word-count">27</span> 語を、声で答えて覚えよう。</p>
     <div class="card">
       <ol class="rules">
         <li>故事成語の<b>「意味」</b>を読み上げます。</li>
@@ -108,6 +112,8 @@
         <button id="dontknow">🤔 分からない</button>
       </div>
       <form id="answer-form"><input id="typed" placeholder="文字で答える（漢字・ひらがな）" autocomplete="off"><button type="submit">回答</button></form>
+      <p class="hint">うまく聞き取れないときは、入力欄をタップしてキーボードの 🎤（音声入力）で話しても答えられます。正解が入力されると自動で判定します。</p>
+      <details class="miclog"><summary>マイクの状態（うまく動かないとき用）</summary><pre id="miclog-body"></pre></details>
     </div>
     <div id="result" class="card" hidden>
       <div id="verdict" class="verdict"></div>

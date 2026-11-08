@@ -112,6 +112,24 @@ const ERROR_TEXT = {
   "service-not-allowed": "マイクの使用が許可されていません",
   "no-speech": "声が聞こえませんでした",
 };
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+// iOS はスピーカー（読み上げ）からマイクへの切り替えに時間がかかるので長めに待つ
+const MIC_DELAY = IS_IOS ? 800 : 350;
+// マイクの状態ログ（画面の「マイクの状態」に表示。不具合の切り分け用）
+let micLogLines = [];
+let micLogStart = Date.now();
+function micLog(msg) {
+  micLogLines.push(`${((Date.now() - micLogStart) / 1000).toFixed(1)}s ${msg}`);
+  if (micLogLines.length > 40) micLogLines.shift();
+  const el = document.getElementById("miclog-body");
+  if (el) el.textContent = micLogLines.join("\n");
+}
+function resetMicLog(label) {
+  micLogLines = [];
+  micLogStart = Date.now();
+  micLog(label);
+}
+let recognizerCount = 0;
 let recognizer = null;
 let recBusy = false; // start() してから onend が来るまで true
 let handlers = {}; // 今の聞き取りのイベント処理
@@ -122,14 +140,21 @@ let autoRetries = 0;
 
 function createRecognizer() {
   const r = new SR();
+  recognizerCount += 1;
+  micLog(`認識オブジェクト作成 #${recognizerCount}`);
   r.lang = "ja-JP";
   r.continuous = false;
   r.interimResults = true;
   r.maxAlternatives = 5;
-  r.onstart = () => handlers.start?.();
+  r.onstart = () => { micLog("start（マイク開始）"); handlers.start?.(); };
+  r.onaudiostart = () => micLog("audiostart（録音開始）");
+  r.onsoundstart = () => micLog("soundstart（音を検知）");
+  r.onspeechstart = () => micLog("speechstart（声を検知）");
+  r.onaudioend = () => micLog("audioend（録音終了）");
   r.onresult = (e) => handlers.result?.(e);
-  r.onerror = (e) => handlers.error?.(e);
+  r.onerror = (e) => { micLog(`error: ${e.error}`); handlers.error?.(e); };
   r.onend = () => {
+    micLog("end（終了）");
     if (recognizer !== r) return;
     recBusy = false;
     const h = handlers;
@@ -142,6 +167,7 @@ function createRecognizer() {
 // 認識オブジェクトを捨てて、次回は新しく作る（固まったときの復旧用）
 function resetRecognizer() {
   const old = recognizer;
+  if (old) micLog("認識オブジェクトを作り直し");
   recognizer = null;
   recBusy = false;
   handlers = {};
@@ -181,16 +207,19 @@ async function listen(auto = false, startRetry = 0) {
   let started = false;
   let done = false;
   let silenceTimer = null;
+  let noResultTimer = null;
   const stopRec = () => { try { r.stop(); } catch { /* 既に停止済み */ } };
   const cleanup = () => {
     done = true;
     clearTimeout(silenceTimer);
+    clearTimeout(noResultTimer);
     clearTimeout(startTimer);
     clearTimeout(watchdog);
   };
   // マイクが開始しなかったとき：作り直して 1 回だけ自動でやり直す
   const restart = (reason) => {
     if (done) return;
+    micLog(`開始できず（${reason}）`);
     cleanup();
     resetRecognizer();
     if (session !== recSession || state.phase !== "question") return;
@@ -204,6 +233,8 @@ async function listen(auto = false, startRetry = 0) {
     start: () => {
       started = true;
       clearTimeout(startTimer);
+      // マイクは動いているのに 8 秒間なにも認識されなければ、いったん止めて作り直す
+      noResultTimer = setTimeout(() => { micLog("8秒間認識なし → 停止"); stopRec(); }, 8000);
       $("heard").textContent = "🎤 どうぞ、答えてください（「分からない」でもOK）";
     },
     result: (e) => {
@@ -211,7 +242,9 @@ async function listen(auto = false, startRetry = 0) {
       const res = e.results[e.results.length - 1];
       const alts = Array.from(res).map((a) => a.transcript).filter(Boolean);
       if (!alts.length) return;
+      if (!lastAlts) micLog(`result: ${alts[0]}`);
       lastAlts = alts;
+      clearTimeout(noResultTimer);
       $("heard").textContent = `聞き取り中…「${alts[0]}」`;
       clearTimeout(silenceTimer);
       if (res.isFinal) { finalAlts = alts; stopRec(); return; }
@@ -233,6 +266,8 @@ async function listen(auto = false, startRetry = 0) {
       }
       listening = false;
       setMicUI();
+      // マイクは動いたのに何も認識しなかった → iOS では同じオブジェクトが認識しなくなることがあるので作り直す
+      if (started && errorCode !== "aborted") resetRecognizer();
       if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
         // Safari はボタン操作なしでマイクを入れると拒否することがある
         $("heard").textContent = auto
@@ -243,7 +278,7 @@ async function listen(auto = false, startRetry = 0) {
       if ($("opt-autolisten").checked && autoRetries < MAX_AUTO_RETRY && errorCode !== "aborted") {
         autoRetries += 1;
         $("heard").textContent = "もう一度どうぞ…";
-        setTimeout(() => listen(true), 400);
+        setTimeout(() => listen(true), MIC_DELAY);
         return;
       }
       $("heard").textContent = `${ERROR_TEXT[errorCode] || "聞き取れませんでした"}。🎤 をもう一度押して答えてください。`;
@@ -259,6 +294,7 @@ async function listen(auto = false, startRetry = 0) {
   }, 15000);
 
   recBusy = true;
+  micLog(auto ? "マイク開始（自動）" : "マイク開始（ボタン）");
   try {
     r.start();
   } catch (err) {
@@ -344,11 +380,12 @@ async function ask() {
   $("heard").textContent = SR ? "🎤 を押して答えるか、下に入力してください。" : "このブラウザは音声認識に対応していません。下に入力して答えてください。";
   $("typed").value = "";
   autoRetries = 0;
+  resetMicLog(`第${state.idx + 1}問`);
   const qIdx = state.idx;
   const finished = await speak(`第${state.idx + 1}問。${item.meaning}`);
   // 読み上げ直後はスピーカーからマイクへの切り替えが間に合わないことがあるので少し待つ
   if (finished && $("opt-autolisten").checked)
-    setTimeout(() => state.phase === "question" && state.idx === qIdx && listen(true), 350);
+    setTimeout(() => state.phase === "question" && state.idx === qIdx && listen(true), MIC_DELAY);
 }
 
 async function answer(candidates) {
@@ -428,8 +465,19 @@ $("btn-retry").onclick = () => { stopSpeaking(); retryWrong(); };
 $("btn-all").onclick = () => { stopSpeaking(); startAll(); };
 $("btn-quit").onclick = () => { stopSpeaking(); stopListening(); if (state.results.length) summary(); else show("screen-start"); };
 $("mic").onclick = () => { if (listening) stopListening(); else { autoRetries = 0; listen(); } };
-$("repeat").onclick = () => { const item = KOJI[state.set[state.idx]]; stopListening(); autoRetries = 0; speak(item.meaning).then((f) => f && $("opt-autolisten").checked && setTimeout(() => listen(true), 350)); };
+$("repeat").onclick = () => { const item = KOJI[state.set[state.idx]]; stopListening(); autoRetries = 0; speak(item.meaning).then((f) => f && $("opt-autolisten").checked && setTimeout(() => listen(true), MIC_DELAY)); };
 $("dontknow").onclick = () => answer(["分からない"]);
+// キーボードの音声入力（🎤）でも答えやすいよう、正解の語が入力された時点で自動で判定する
+let typedTimer = null;
+$("typed").addEventListener("input", () => {
+  clearTimeout(typedTimer);
+  typedTimer = setTimeout(() => {
+    const v = $("typed").value.trim();
+    if (!v || state.phase !== "question") return;
+    const verdict = judge([v], KOJI[state.set[state.idx]]);
+    if (verdict !== "wrong") { stopListening(); answer([v]); }
+  }, 700);
+});
 $("answer-form").onsubmit = (e) => { e.preventDefault(); const v = $("typed").value.trim(); if (v) answer([v]); };
 $("btn-nextq").onclick = next;
 $("override").onclick = () => {

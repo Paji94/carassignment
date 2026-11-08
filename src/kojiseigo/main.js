@@ -100,100 +100,175 @@ function stopSpeaking() {
 }
 
 // ---------- 音声認識 ----------
+// iOS Safari は認識オブジェクトを毎回作り直すと、数回で新しいマイクが開始できなくなる。
+// そのため 1 つを使い回し、前回の聞き取りが完全に終わってから次を開始する。
+// 開始しない・固まったときだけ作り直す。
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const MAX_AUTO_RETRY = 2; // 何も聞こえなかったとき、自動でマイクを入れ直す回数
-let rec = null;
+const ERROR_TEXT = {
+  "audio-capture": "マイクの音を取得できませんでした",
+  network: "通信エラーで聞き取れませんでした",
+  "not-allowed": "マイクの使用が許可されていません",
+  "service-not-allowed": "マイクの使用が許可されていません",
+  "no-speech": "声が聞こえませんでした",
+};
+let recognizer = null;
+let recBusy = false; // start() してから onend が来るまで true
+let handlers = {}; // 今の聞き取りのイベント処理
+let idleWaiters = [];
 let listening = false;
 let recSession = 0;
 let autoRetries = 0;
 
-function listen(auto = false) {
-  if (!SR || listening || state.phase !== "question") return;
-  stopSpeaking();
-  discardRecognizer();
-  const session = ++recSession;
+function createRecognizer() {
   const r = new SR();
-  rec = r;
   r.lang = "ja-JP";
   r.continuous = false;
   r.interimResults = true;
   r.maxAlternatives = 5;
+  r.onstart = () => handlers.start?.();
+  r.onresult = (e) => handlers.result?.(e);
+  r.onerror = (e) => handlers.error?.(e);
+  r.onend = () => {
+    if (recognizer !== r) return;
+    recBusy = false;
+    const h = handlers;
+    handlers = {};
+    h.end?.();
+    idleWaiters.splice(0).forEach((f) => f());
+  };
+  return r;
+}
+// 認識オブジェクトを捨てて、次回は新しく作る（固まったときの復旧用）
+function resetRecognizer() {
+  const old = recognizer;
+  recognizer = null;
+  recBusy = false;
+  handlers = {};
+  if (old) {
+    old.onstart = old.onresult = old.onerror = old.onend = null;
+    try { old.abort(); } catch { /* noop */ }
+  }
+  idleWaiters.splice(0).forEach((f) => f());
+}
+// 前回の聞き取りが終わるのを待つ（1.2 秒待っても終わらなければ作り直す）
+function whenIdle() {
+  if (!recBusy) return Promise.resolve();
+  try { recognizer.abort(); } catch { /* noop */ }
+  return new Promise((resolve) => {
+    idleWaiters.push(resolve);
+    setTimeout(() => { if (recBusy) resetRecognizer(); resolve(); }, 1200);
+  });
+}
+
+async function listen(auto = false, startRetry = 0) {
+  if (!SR || state.phase !== "question") return;
+  if (listening && startRetry === 0) return;
+  const session = ++recSession;
+  listening = true;
+  setMicUI();
+  stopSpeaking();
+  $("heard").textContent = "🎤 マイクを準備中…";
+  // 空いていれば待たずにすぐ開始する（ボタン操作の直後に start() を呼ぶため）
+  if (recBusy) await whenIdle();
+  if (session !== recSession || state.phase !== "question") return;
+  if (!recognizer) recognizer = createRecognizer();
+  const r = recognizer;
 
   let lastAlts = null;
   let finalAlts = null;
   let errorCode = null;
+  let started = false;
   let done = false;
   let silenceTimer = null;
   const stopRec = () => { try { r.stop(); } catch { /* 既に停止済み */ } };
-
-  r.onresult = (e) => {
-    const res = e.results[e.results.length - 1];
-    const alts = Array.from(res).map((a) => a.transcript).filter(Boolean);
-    if (!alts.length) return;
-    lastAlts = alts;
-    $("heard").textContent = `聞き取り中…「${alts[0]}」`;
-    clearTimeout(silenceTimer);
-    if (res.isFinal) { finalAlts = alts; stopRec(); return; }
-    // Safari は確定結果（isFinal）を返さずに聞き続けることがあるため、話し終えて少し経ったら確定させる
-    silenceTimer = setTimeout(stopRec, 1500);
-  };
-  r.onerror = (e) => { errorCode = e.error; };
-
-  const finish = () => {
-    if (done) return;
+  const cleanup = () => {
     done = true;
     clearTimeout(silenceTimer);
+    clearTimeout(startTimer);
     clearTimeout(watchdog);
-    if (session !== recSession) return; // 新しい聞き取りに置き換わった古いもの
-    rec = null;
+  };
+  // マイクが開始しなかったとき：作り直して 1 回だけ自動でやり直す
+  const restart = (reason) => {
+    if (done) return;
+    cleanup();
+    resetRecognizer();
+    if (session !== recSession || state.phase !== "question") return;
+    if (startRetry < 1) { setTimeout(() => listen(auto, startRetry + 1), 300); return; }
     listening = false;
     setMicUI();
-    const alts = finalAlts || lastAlts;
-    if (alts && alts.length) return answer(alts);
-    if (state.phase !== "question") return;
-    if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
-      // Safari はボタン操作なしでマイクを入れると拒否することがある
-      $("heard").textContent = auto
-        ? "🎤 を押して答えてください。"
-        : "マイクが使えません。ブラウザの設定でマイクを許可するか、下の入力欄に書いて回答してください。";
-      return;
-    }
-    if ($("opt-autolisten").checked && autoRetries < MAX_AUTO_RETRY && errorCode !== "aborted") {
-      autoRetries += 1;
-      $("heard").textContent = "もう一度どうぞ…";
-      setTimeout(() => listen(true), 400);
-      return;
-    }
-    $("heard").textContent = "聞き取れませんでした。🎤 をもう一度押して答えてください。";
+    $("heard").textContent = `マイクを開始できませんでした（${reason}）。もう一度 🎤 を押すか、下の入力欄に書いて回答してください。`;
   };
-  r.onend = finish;
-  // 終了通知が来ないまま固まった場合の保険（15秒で打ち切って状態を戻す）
-  const watchdog = setTimeout(() => { try { r.abort(); } catch { /* noop */ } setTimeout(finish, 600); }, 15000);
 
-  listening = true;
-  setMicUI();
-  $("heard").textContent = "🎤 どうぞ、答えてください（「分からない」でもOK）";
+  handlers = {
+    start: () => {
+      started = true;
+      clearTimeout(startTimer);
+      $("heard").textContent = "🎤 どうぞ、答えてください（「分からない」でもOK）";
+    },
+    result: (e) => {
+      started = true;
+      const res = e.results[e.results.length - 1];
+      const alts = Array.from(res).map((a) => a.transcript).filter(Boolean);
+      if (!alts.length) return;
+      lastAlts = alts;
+      $("heard").textContent = `聞き取り中…「${alts[0]}」`;
+      clearTimeout(silenceTimer);
+      if (res.isFinal) { finalAlts = alts; stopRec(); return; }
+      // Safari は確定結果（isFinal）を返さずに聞き続けることがあるため、話し終えて少し経ったら確定させる
+      silenceTimer = setTimeout(stopRec, 1500);
+    },
+    error: (e) => { errorCode = e.error; },
+    end: () => {
+      if (done) return;
+      cleanup();
+      if (session !== recSession) return;
+      const alts = finalAlts || lastAlts;
+      if (alts && alts.length) { listening = false; setMicUI(); return answer(alts); }
+      if (state.phase !== "question") { listening = false; setMicUI(); return; }
+      // 音を拾えないまま終わった（iOS でマイクがつかめていない）→ 作り直してやり直す
+      if (errorCode === "audio-capture" || (!started && errorCode !== "not-allowed" && errorCode !== "service-not-allowed")) {
+        done = false;
+        return restart(errorCode || "開始されませんでした");
+      }
+      listening = false;
+      setMicUI();
+      if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+        // Safari はボタン操作なしでマイクを入れると拒否することがある
+        $("heard").textContent = auto
+          ? "🎤 を押して答えてください。"
+          : "マイクが使えません。ブラウザの設定でマイクを許可するか、下の入力欄に書いて回答してください。";
+        return;
+      }
+      if ($("opt-autolisten").checked && autoRetries < MAX_AUTO_RETRY && errorCode !== "aborted") {
+        autoRetries += 1;
+        $("heard").textContent = "もう一度どうぞ…";
+        setTimeout(() => listen(true), 400);
+        return;
+      }
+      $("heard").textContent = `${ERROR_TEXT[errorCode] || "聞き取れませんでした"}。🎤 をもう一度押して答えてください。`;
+    },
+  };
+
+  // start() しても 3 秒以内にマイクが開始しなければ固まったとみなす
+  const startTimer = setTimeout(() => { if (!started) restart("応答なし"); }, 3000);
+  // 終了通知が来ないまま固まった場合の保険（15 秒で打ち切る）
+  const watchdog = setTimeout(() => {
+    stopRec();
+    setTimeout(() => { if (!done) { const end = handlers.end; resetRecognizer(); end?.(); } }, 1000);
+  }, 15000);
+
+  recBusy = true;
   try {
     r.start();
-  } catch {
-    done = true;
-    clearTimeout(watchdog);
-    rec = null;
-    listening = false;
-    setMicUI();
-    $("heard").textContent = "🎤 を押して答えてください。";
+  } catch (err) {
+    restart(err && err.name ? err.name : "開始エラー");
   }
-}
-function discardRecognizer() {
-  if (!rec) return;
-  const old = rec;
-  rec = null;
-  old.onresult = old.onerror = old.onend = null;
-  try { old.abort(); } catch { /* noop */ }
 }
 function stopListening() {
   recSession++;
-  discardRecognizer();
+  handlers = {};
+  if (recBusy && recognizer) { try { recognizer.abort(); } catch { /* noop */ } }
   listening = false;
   setMicUI();
 }

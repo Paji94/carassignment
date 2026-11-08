@@ -115,6 +115,31 @@ function setMicUI() {
 
 // ---------- 進行管理 ----------
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// 前回と同じ並びにならないシャッフル。前回の順番は localStorage に保存し、ページを開き直しても引き継ぐ。
+// 候補を何通りか作り、「前回と同じ位置に来る語」と「最初の10問が前回の最初の10問と重なる語」が最も少ないものを選ぶ。
+const ORDER_KEY = "kojiseigo:lastOrder";
+const lastOrders = {};
+function loadOrder(key) {
+  if (key in lastOrders) return lastOrders[key];
+  try { return JSON.parse(localStorage.getItem(`${ORDER_KEY}:${key}`)) || []; } catch { return []; }
+}
+function saveOrder(key, order) {
+  lastOrders[key] = order;
+  try { localStorage.setItem(`${ORDER_KEY}:${key}`, JSON.stringify(order)); } catch { /* 保存できなくても続行 */ }
+}
+function freshShuffle(ids, key) {
+  const prev = loadOrder(key);
+  const prevHead = new Set(prev.slice(0, SET_SIZE));
+  const score = (o) => o.reduce((n, id, i) => n + (prev[i] === id ? 2 : 0) + (i < SET_SIZE && prevHead.has(id) ? 1 : 0), 0);
+  let best = shuffle(ids);
+  for (let t = 0; t < 30 && ids.length > 1; t++) {
+    const cand = shuffle(ids);
+    if (score(cand) < score(best)) best = cand;
+  }
+  saveOrder(key, best);
+  return best;
+}
 const state = { pool: [], set: [], idx: 0, results: [], phase: "start", setNo: 0, mode: "normal" };
 
 function show(screen) {
@@ -122,7 +147,7 @@ function show(screen) {
 }
 
 function startAll() {
-  state.pool = shuffle(KOJI.map((_, i) => i));
+  state.pool = freshShuffle(KOJI.map((_, i) => i), "all");
   state.setNo = 0;
   nextSet();
 }
@@ -132,7 +157,7 @@ function nextSet() {
   beginSet();
 }
 function retryWrong() {
-  state.set = shuffle(state.results.filter((r) => !r.correct).map((r) => r.id));
+  state.set = freshShuffle(state.results.filter((r) => !r.correct).map((r) => r.id), "retry");
   state.mode = "retry";
   beginSet();
 }

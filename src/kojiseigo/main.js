@@ -193,11 +193,11 @@ async function answer(candidates) {
   state.results.push({ id: state.set[state.idx], correct: verdict === "correct", said, verdict });
   renderFeedback(item, verdict, said);
   if (verdict === "correct") {
-    const done = await speak(`正解！ ${item.word}。`);
+    const done = await speak(`正解！ ${item.yomi}。`);
     if (done && state.phase === "feedback") next();
   } else {
     const head = verdict === "dontknow" ? "大丈夫、覚えていきましょう。" : "残念、不正解です。";
-    const done = await speak(`${head}正解は、${item.yomi}。${item.word}です。意味は、${item.meaning}${item.origin}`);
+    const done = await speak(`${head}正解は、${item.yomi}です。意味は、${item.meaning}${item.origin}`);
     if (done && state.phase === "feedback" && $("opt-autonext").checked) setTimeout(() => state.phase === "feedback" && next(), 1200);
   }
 }
@@ -249,7 +249,7 @@ function summary() {
   $("btn-next").hidden = left === 0;
   $("btn-next").textContent = `次の${Math.min(SET_SIZE, left)}問へ（残り${left}語）`;
   $("btn-all").textContent = left === 0 ? `全${KOJI.length}語 完了！もう一度最初から` : "全問シャッフルして最初から";
-  const reviewText = wrong.length ? `間違えた問題は、${wrong.map((r) => KOJI[r.id].word).join("、")}です。` : "";
+  const reviewText = wrong.length ? `間違えた問題は、${wrong.map((r) => KOJI[r.id].yomi).join("、")}です。` : "";
   speak(`今回の結果は、${state.results.length}問中、${correct}問正解です。${reviewText}`);
 }
 

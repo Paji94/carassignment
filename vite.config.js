@@ -12,6 +12,7 @@ export default defineConfig({
         riverCamera: resolve(__dirname, "river-camera.html"),
         hamastaNightWatch: resolve(__dirname, "hamasta-night-watch.html"),
         onsen: resolve(__dirname, "onsen.html"),
+        kojiseigo: resolve(__dirname, "kojiseigo.html"),
       },
     },
   },

@@ -8,6 +8,7 @@ Vite + React multi-page app. Each page is a separate HTML entry registered in `v
 
 - `index.html` → `src/main.jsx` / `src/App.jsx` — 選手車の割り当てツール (car assignment for players; JSX)
 - `river-camera.html`, `hamasta-night-watch.html` — standalone pages with inline scripts
+- `kojiseigo.html` → `src/kojiseigo/` — 故事成語テスト (voice quiz: Web Speech API for TTS + recognition; plain JS, data in `data.js`)
 - `onsen.html` → `src/onsen/` — 湯めぐりマップ (hot spring map; TypeScript + Tailwind CSS v4 + react-leaflet)
   - Components: `src/onsen/components/` (Header, MapView, HotSpringList, DetailModal)
   - Mock data: `src/data/hotsprings.ts` (lat/lng, 泉質, 源泉温度, 効能, アクセス)

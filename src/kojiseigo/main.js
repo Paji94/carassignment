@@ -49,21 +49,50 @@ if ("speechSynthesis" in window) {
   speechSynthesis.onvoiceschanged = pickVoice;
 }
 let speechToken = 0;
+// 読み上げ中の発話をここで保持する（Chrome は参照のない発話を破棄し、終了通知 onend が来なくなるため）
+const liveUtterances = new Set();
+function speakChunk(chunk, token) {
+  return new Promise((resolve) => {
+    if (token !== speechToken) return resolve();
+    const rate = Number($("opt-rate").value);
+    const u = new SpeechSynthesisUtterance(chunk);
+    u.lang = "ja-JP";
+    u.rate = rate;
+    if (jaVoice) u.voice = jaVoice;
+    liveUtterances.add(u);
+    let done = false;
+    let started = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(limitTimer);
+      clearInterval(poll);
+      liveUtterances.delete(u);
+      resolve();
+    };
+    u.onend = u.onerror = finish;
+    // onend が来ないまま止まる不具合（Safari / Chrome）対策：
+    // 読み上げ状態を監視して終わったら次へ進み、長すぎるときは上限時間で打ち切る
+    const startedAt = Date.now();
+    const poll = setInterval(() => {
+      const busy = speechSynthesis.speaking || speechSynthesis.pending;
+      if (busy) started = true;
+      else if (started || Date.now() - startedAt > 1500) finish();
+    }, 300);
+    const limitTimer = setTimeout(finish, 3000 + (chunk.length * 350) / rate);
+    speechSynthesis.resume();
+    speechSynthesis.speak(u);
+  });
+}
 function speak(text) {
-  if (!("speechSynthesis" in window) || !$("opt-voice").checked) return Promise.resolve();
+  if (!("speechSynthesis" in window) || !$("opt-voice").checked) return Promise.resolve(true);
   const token = ++speechToken;
   speechSynthesis.cancel();
   // Chrome は長文の読み上げが途中で止まるため、句点で区切って順番に読む
   const chunks = text.split(/(?<=[。！？])/).map((s) => s.trim()).filter(Boolean);
-  return chunks.reduce((p, chunk) => p.then(() => new Promise((resolve) => {
-    if (token !== speechToken) return resolve();
-    const u = new SpeechSynthesisUtterance(chunk);
-    u.lang = "ja-JP";
-    u.rate = Number($("opt-rate").value);
-    if (jaVoice) u.voice = jaVoice;
-    u.onend = u.onerror = () => resolve();
-    speechSynthesis.speak(u);
-  })), Promise.resolve()).then(() => token === speechToken);
+  return chunks
+    .reduce((p, chunk) => p.then(() => speakChunk(chunk, token)), Promise.resolve())
+    .then(() => token === speechToken);
 }
 function stopSpeaking() {
   speechToken++;
@@ -72,45 +101,105 @@ function stopSpeaking() {
 
 // ---------- 音声認識 ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const MAX_AUTO_RETRY = 2; // 何も聞こえなかったとき、自動でマイクを入れ直す回数
 let rec = null;
 let listening = false;
-function listen() {
+let recSession = 0;
+let autoRetries = 0;
+
+function listen(auto = false) {
   if (!SR || listening || state.phase !== "question") return;
   stopSpeaking();
-  rec = new SR();
-  rec.lang = "ja-JP";
-  rec.interimResults = true;
-  rec.maxAlternatives = 5;
+  discardRecognizer();
+  const session = ++recSession;
+  const r = new SR();
+  rec = r;
+  r.lang = "ja-JP";
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 5;
+
+  let lastAlts = null;
   let finalAlts = null;
-  rec.onresult = (e) => {
-    const r = e.results[e.results.length - 1];
-    $("heard").textContent = `聞き取り中…「${r[0].transcript}」`;
-    if (r.isFinal) finalAlts = Array.from(r).map((a) => a.transcript);
+  let errorCode = null;
+  let done = false;
+  let silenceTimer = null;
+  const stopRec = () => { try { r.stop(); } catch { /* 既に停止済み */ } };
+
+  r.onresult = (e) => {
+    const res = e.results[e.results.length - 1];
+    const alts = Array.from(res).map((a) => a.transcript).filter(Boolean);
+    if (!alts.length) return;
+    lastAlts = alts;
+    $("heard").textContent = `聞き取り中…「${alts[0]}」`;
+    clearTimeout(silenceTimer);
+    if (res.isFinal) { finalAlts = alts; stopRec(); return; }
+    // Safari は確定結果（isFinal）を返さずに聞き続けることがあるため、話し終えて少し経ったら確定させる
+    silenceTimer = setTimeout(stopRec, 1500);
   };
-  rec.onerror = (e) => {
-    if (e.error === "not-allowed" || e.error === "service-not-allowed")
-      $("heard").textContent = "マイクが使えません。下の入力欄に書いて回答してください。";
-  };
-  rec.onend = () => {
+  r.onerror = (e) => { errorCode = e.error; };
+
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(silenceTimer);
+    clearTimeout(watchdog);
+    if (session !== recSession) return; // 新しい聞き取りに置き換わった古いもの
+    rec = null;
     listening = false;
     setMicUI();
-    if (finalAlts && finalAlts.length) answer(finalAlts);
-    else if (state.phase === "question" && !$("heard").textContent.startsWith("マイク"))
-      $("heard").textContent = "聞き取れませんでした。🎤 をもう一度押して答えてください。";
+    const alts = finalAlts || lastAlts;
+    if (alts && alts.length) return answer(alts);
+    if (state.phase !== "question") return;
+    if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+      // Safari はボタン操作なしでマイクを入れると拒否することがある
+      $("heard").textContent = auto
+        ? "🎤 を押して答えてください。"
+        : "マイクが使えません。ブラウザの設定でマイクを許可するか、下の入力欄に書いて回答してください。";
+      return;
+    }
+    if ($("opt-autolisten").checked && autoRetries < MAX_AUTO_RETRY && errorCode !== "aborted") {
+      autoRetries += 1;
+      $("heard").textContent = "もう一度どうぞ…";
+      setTimeout(() => listen(true), 400);
+      return;
+    }
+    $("heard").textContent = "聞き取れませんでした。🎤 をもう一度押して答えてください。";
   };
+  r.onend = finish;
+  // 終了通知が来ないまま固まった場合の保険（15秒で打ち切って状態を戻す）
+  const watchdog = setTimeout(() => { try { r.abort(); } catch { /* noop */ } setTimeout(finish, 600); }, 15000);
+
   listening = true;
   setMicUI();
   $("heard").textContent = "🎤 どうぞ、答えてください（「分からない」でもOK）";
-  try { rec.start(); } catch { listening = false; setMicUI(); }
+  try {
+    r.start();
+  } catch {
+    done = true;
+    clearTimeout(watchdog);
+    rec = null;
+    listening = false;
+    setMicUI();
+    $("heard").textContent = "🎤 を押して答えてください。";
+  }
+}
+function discardRecognizer() {
+  if (!rec) return;
+  const old = rec;
+  rec = null;
+  old.onresult = old.onerror = old.onend = null;
+  try { old.abort(); } catch { /* noop */ }
 }
 function stopListening() {
-  if (rec && listening) { rec.onend = () => { listening = false; setMicUI(); }; rec.abort(); }
+  recSession++;
+  discardRecognizer();
   listening = false;
   setMicUI();
 }
 function setMicUI() {
   $("mic").classList.toggle("on", listening);
-  $("mic").textContent = listening ? "● 聞いています" : "🎤 声で答える";
+  $("mic").textContent = listening ? "● 聞いています（タップで停止）" : "🎤 声で答える";
 }
 
 // ---------- 進行管理 ----------
@@ -179,8 +268,12 @@ async function ask() {
   $("answer-area").hidden = false;
   $("heard").textContent = SR ? "🎤 を押して答えるか、下に入力してください。" : "このブラウザは音声認識に対応していません。下に入力して答えてください。";
   $("typed").value = "";
+  autoRetries = 0;
+  const qIdx = state.idx;
   const finished = await speak(`第${state.idx + 1}問。${item.meaning}`);
-  if (finished && state.phase === "question" && $("opt-autolisten").checked) listen();
+  // 読み上げ直後はスピーカーからマイクへの切り替えが間に合わないことがあるので少し待つ
+  if (finished && $("opt-autolisten").checked)
+    setTimeout(() => state.phase === "question" && state.idx === qIdx && listen(true), 350);
 }
 
 async function answer(candidates) {
@@ -193,11 +286,11 @@ async function answer(candidates) {
   state.results.push({ id: state.set[state.idx], correct: verdict === "correct", said, verdict });
   renderFeedback(item, verdict, said);
   if (verdict === "correct") {
-    const done = await speak(`正解！ ${item.word}。`);
+    const done = await speak(`正解！ ${item.yomi}。`);
     if (done && state.phase === "feedback") next();
   } else {
     const head = verdict === "dontknow" ? "大丈夫、覚えていきましょう。" : "残念、不正解です。";
-    const done = await speak(`${head}正解は、${item.yomi}。${item.word}です。意味は、${item.meaning}${item.origin}`);
+    const done = await speak(`${head}正解は、${item.yomi}です。意味は、${item.meaning}${item.origin}`);
     if (done && state.phase === "feedback" && $("opt-autonext").checked) setTimeout(() => state.phase === "feedback" && next(), 1200);
   }
 }
@@ -249,7 +342,7 @@ function summary() {
   $("btn-next").hidden = left === 0;
   $("btn-next").textContent = `次の${Math.min(SET_SIZE, left)}問へ（残り${left}語）`;
   $("btn-all").textContent = left === 0 ? `全${KOJI.length}語 完了！もう一度最初から` : "全問シャッフルして最初から";
-  const reviewText = wrong.length ? `間違えた問題は、${wrong.map((r) => KOJI[r.id].word).join("、")}です。` : "";
+  const reviewText = wrong.length ? `間違えた問題は、${wrong.map((r) => KOJI[r.id].yomi).join("、")}です。` : "";
   speak(`今回の結果は、${state.results.length}問中、${correct}問正解です。${reviewText}`);
 }
 
@@ -259,8 +352,8 @@ $("btn-next").onclick = () => { stopSpeaking(); nextSet(); };
 $("btn-retry").onclick = () => { stopSpeaking(); retryWrong(); };
 $("btn-all").onclick = () => { stopSpeaking(); startAll(); };
 $("btn-quit").onclick = () => { stopSpeaking(); stopListening(); if (state.results.length) summary(); else show("screen-start"); };
-$("mic").onclick = () => (listening ? stopListening() : listen());
-$("repeat").onclick = () => { const item = KOJI[state.set[state.idx]]; stopListening(); speak(item.meaning).then((f) => f && $("opt-autolisten").checked && listen()); };
+$("mic").onclick = () => { if (listening) stopListening(); else { autoRetries = 0; listen(); } };
+$("repeat").onclick = () => { const item = KOJI[state.set[state.idx]]; stopListening(); autoRetries = 0; speak(item.meaning).then((f) => f && $("opt-autolisten").checked && setTimeout(() => listen(true), 350)); };
 $("dontknow").onclick = () => answer(["分からない"]);
 $("answer-form").onsubmit = (e) => { e.preventDefault(); const v = $("typed").value.trim(); if (v) answer([v]); };
 $("btn-nextq").onclick = next;
